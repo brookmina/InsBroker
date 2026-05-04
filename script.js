@@ -117,7 +117,7 @@
                 const centerOffset = computed(() => {
                     if (!activeOptionId.value) return { x: 0, y: 0 };
                     const opt = options.find(o => o.id === activeOptionId.value);
-                    return opt ? { x: opt.offsetX * 0.35, y: opt.offsetY * 0.35 } : { x: 0, y: 0 };
+                    return opt ? { x: opt.offsetX, y: opt.offsetY } : { x: 0, y: 0 };
                 });
 
                 return { trackRef, isOpen, isEntering, origin, activeOptionId, options, centerOffset, onPointerDown, onPointerMove, onPointerUp, sparkActiveId };
@@ -369,7 +369,7 @@
                         setTimeout(() => {
                             if (window.driver && window.driver.js && typeof window.driver.js.driver === 'function') {
                                 const driver = window.driver.js.driver;
-                                const driverObj = driver({ showProgress: true, nextBtnText: '下一步', prevBtnText: '上一步', doneBtnText: '開始體驗', progressText: '{{current}} / {{total}}', popoverClass: 'custom-driver-popover', allowClose: false, steps: [ { popover: { title: '', description: '<div class="flex items-center gap-5 pt-2"><img src="img/aiimg.png" class="w-24 h-24 object-contain shrink-0 drop-shadow-xl"><div class="flex flex-col text-left"><h3 class="text-xl font-black text-indigo-950 dark:text-white mb-1.5 tracking-tight">歡迎使用保險智能腦</h3><p class="text-sm text-slate-700 dark:text-gray-300 leading-relaxed font-bold">讓我們先快速了解系統的幾個核心介面與功能！</p></div></div>' } }, { element: '#tour-nav', popover: { title: '五大模組切換', description: '您隨時可以在底部切換專屬功能。', side: 'top', align: 'center' } }, { element: '#tour-quick-queries', popover: { title: '快捷指令區', description: '一鍵點擊常用指令，或左右滑動查看更多。', side: 'top', align: 'start' } }, { element: '#tour-chat-input', popover: { title: '多模態輸入', description: '可點擊麥克風語音輸入，或點擊迴紋針上傳單據。', side: 'top', align: 'start' } }, { popover: { title: '💡 隱藏版高級操作', description: '長按 3 秒任何【商品名稱】即可解鎖「無縫推滑介面」！' } } ] });
+                                const driverObj = driver({ showProgress: true, nextBtnText: '下一步', prevBtnText: '上一步', doneBtnText: '開始體驗', progressText: '{{current}} / {{total}}', popoverClass: 'custom-driver-popover', allowClose: false, steps: [ { popover: { title: '', description: '<div class="flex items-center gap-5 pt-2"><img src="img/aiimg.png" class="w-24 h-24 object-contain shrink-0 drop-shadow-xl"><div class="flex flex-col text-left"><h3 class="text-xl font-black text-indigo-950 dark:text-white mb-1.5 tracking-tight">歡迎使用保經智能腦</h3><p class="text-sm text-slate-700 dark:text-gray-300 leading-relaxed font-bold">讓我們先快速了解系統的幾個核心介面與功能！</p></div></div>' } }, { element: '#tour-nav', popover: { title: '五大模組切換', description: '您隨時可以在底部切換專屬功能。', side: 'top', align: 'center' } }, { element: '#tour-quick-queries', popover: { title: '快捷指令區', description: '一鍵點擊常用指令，或左右滑動查看更多。', side: 'top', align: 'start' } }, { element: '#tour-chat-input', popover: { title: '多模態輸入', description: '可點擊麥克風語音輸入，或點擊迴紋針上傳單據。', side: 'top', align: 'start' } }, { popover: { title: '💡 隱藏版高級操作', description: '長按 3 秒任何【商品名稱】即可解鎖「無縫推滑介面」！' } } ] });
                                 driverObj.drive();
                             }
                         }, 500);
