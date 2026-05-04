@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>保險智能客服助理 - 滿版</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        stripe: {
+                            blurple: '#635BFF',
+                            dark: '#0A2540',
+                            light: '#FFFFFF',
+                            slate: '#425466',
+                            border: '#E6EBEF',
+                            darkBorder: '#333A45',
+                            darkCard: '#1A1F29',
+                            darkBg: '#0E131F'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['"Inter"', 'ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'sans-serif'],
+                    },
+                    boxShadow: {
+                        'stripe': '0 4px 20px -2px rgba(99, 91, 255, 0.08), 0 1px 3px -1px rgba(0, 0, 0, 0.03)',
+                        'stripe-hover': '0 8px 25px -4px rgba(99, 91, 255, 0.15), 0 3px 7px -3px rgba(0, 0, 0, 0.08)',
+                        'stripe-focus': '0 0 0 4px rgba(99, 91, 255, 0.2)',
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.3.4/vue.global.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- 引入拆分後的獨立 CSS 檔案 -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-indigo-50/50 dark:bg-stripe-darkBg min-h-screen text-slate-800 dark:text-gray-100 touch-manipulation transition-colors duration-300 relative">
+       <!-- 全域活潑漸層背景 ( Light Mode 特有 ) -->
+    <div class="fixed inset-0 z-0 pointer-events-none hidden dark:hidden sm:block" style="background: radial-gradient(circle at 10% 0%, rgba(238,242,255,1) 0%, transparent 40%), radial-gradient(circle at 90% 10%, rgba(240,253,250,1) 0%, transparent 40%), radial-gradient(circle at 50% 80%, rgba(250,245,255,1) 0%, transparent 50%);"></div>
+    <div id="app" class="w-full h-[100dvh] mx-auto sm:max-w-screen-md bg-white/70 
+        backdrop-blur-3xl dark:bg-stripe-darkBg overflow-hidden flex flex-col relative 
+        shadow-[0_0_50px_rgba(99,91,255,0.08)] dark:shadow-2xl transition-colors 
+        duration-300 border-x border-white/50 dark:border-stripe-darkBorder z-10">
+        <draggable-fab v-if="compareList && compareList.length > 0 && isLoggedIn" :count="compareList.length" 
+            @open-modal="showGamifiedModal = true"></draggable-fab>
+        <transition name="modal-fade">
+            <gamified-compare-modal v-if="showGamifiedModal" :initial-items="compareList" @close="showGamifiedModal = false" 
+            @update-list="updateCompareList" @analyze="handleAnalyzeAction"></gamified-compare-modal>
+        </transition>
+        <!-- ================= Modal: Apple 風格滑動登出 ================= -->
+        <transition name="fade">
+            <div v-if="showLogoutOverlay" class="absolute inset-0 z-[300] bg-black/80 backdrop-blur-xl flex flex-col 
+            items-center justify-between py-24 touch-none select-none prevent-select">
+                <div class="flex flex-col items-center mt-10">
+                    <!-- 滑動條 -->
+                    <div class="relative w-[320px] h-[72px] rounded-full bg-white/20 border border-white/10 overflow-hidden 
+                    flex items-center shadow-[inset_0_0_20px_rgba(0,0,0,0.5)]">
+                        <div class="absolute inset-0 flex items-center justify-center pointer-events-none transition-opacity" 
+                        :style="{ opacity: 1 - (logoutDragX / logoutMaxX) }">
+                            <span class="text-lg font-bold tracking-[0.2em] pl-8 shimmer-text">滑動來中斷神經連結</span>
+                        </div>
+                        <div class="absolute left-1.5 w-[60px] h-[60px] bg-white rounded-full flex items-center justify-center 
+                        cursor-grab active:cursor-grabbing shadow-[0_0_15px_rgba(0,0,0,0.3)] z-10"
+                             :style="{ transform: 'translate3d(' + logoutDragX + 'px, 0, 0)', transition: isLogoutDragging ? 'none' : 'transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)' }"
+                             @pointerdown.stop.prevent="startLogoutDrag">
+                             <i class="fa-solid fa-brain text-rose-500 text-2xl"></i>
+                        </div>
+                    </div>
+                </div>
+                <!-- 取消按鈕 -->
+                <button @click="cancelLogout" class="w-[72px] h-[72px] rounded-full bg-white/20 border border-white/10 text-white flex items-center justify-center transition-colors active:bg-white/30 hover:bg-white/25 shadow-sm mb-10">
+                    <i class="fa-solid fa-xmark text-3xl"></i>
+                </button>
+            </div>
+        </transition>
+
+        <transition name="fade" mode="out-in">
+            <!-- ================= 登入畫面 ================= -->
+            <div v-if="!isLoggedIn" class="flex flex-col items-center justify-center h-full w-full bg-gradient-to-br from-indigo-50/80 via-white to-purple-50/80 dark:from-stripe-darkBg dark:to-stripe-darkBg p-6 z-50 relative overflow-hidden transition-colors duration-300">
+                <div class="absolute top-[-10%] left-[-10%] w-72 h-72 bg-stripe-blurple rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[100px] opacity-40 dark:opacity-30 animate-blob"></div>
+                <div class="absolute bottom-[-10%] right-[-10%] w-72 h-72 bg-teal-400 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[100px] opacity-40 dark:opacity-20 animate-blob" style="animation-delay: 2s;"></div>
+                <div class="absolute inset-0 z-0 opacity-[0.05] dark:opacity-[0.05]" style="background-image: radial-gradient(circle at 2px 2px, currentColor 1px, transparent 0); background-size: 24px 24px;"></div>
+                <div class="perspective-grid-wrapper pointer-events-none"><div class="perspective-grid opacity-60 dark:opacity-40"></div></div>
+                <div class="relative z-10 flex flex-col items-center w-full max-w-sm mt-[-10%]">
+                    <div class="relative flex items-center justify-center mb-10">
+                        <div class="absolute inset-0 bg-stripe-blurple rounded-full blur-[40px] opacity-40 dark:opacity-40 animate-pulse"></div>
+                        <div class="w-24 h-24 bg-white/90 backdrop-blur-md dark:bg-stripe-darkCard border border-indigo-100 dark:border-stripe-darkBorder rounded-3xl flex items-center justify-center relative shadow-stripe z-10 rotate-3 transition-transform hover:rotate-0">
+                            <i class="fa-solid fa-brain text-5xl text-transparent bg-clip-text bg-gradient-to-br from-stripe-blurple to-fuchsia-500"></i>
+                            <div class="absolute top-2 right-3 w-2 h-2 bg-teal-400 rounded-full animate-ping"></div>
+                        </div>
+                    </div>
+                    <h1 class="text-3xl font-extrabold text-indigo-950 dark:text-white mb-2 tracking-tight text-center">保險智能腦</h1>
+                    <p class="text-[11px] text-indigo-500/80 dark:text-gray-400 font-bold tracking-[0.2em] 
+                    mb-10 uppercase flex items-center gap-2"><span class="w-4 h-px bg-indigo-200 dark:bg-gray-600"></span> Neural Engine <span class="w-4 h-px bg-indigo-200 dark:bg-gray-600"></span></p>
+                    <form @submit.prevent="handleLogin" class="w-full">
+                        <div class="space-y-4">
+                            <div class="relative group"><i class="fa-solid fa-user-astronaut absolute left-4 top-3.5 
+                                text-indigo-300 dark:text-gray-400 group-focus-within:text-stripe-blurple transition-colors z-20"></i><input v-model="loginForm.account" type="text" placeholder="輸入授權編號" required class="w-full bg-white/80 backdrop-blur-sm dark:bg-stripe-darkCard border border-indigo-100 dark:border-stripe-darkBorder focus:border-stripe-blurple text-indigo-950 dark:text-white rounded-full pl-11 pr-4 py-3 text-sm outline-none transition-all placeholder-indigo-300 shadow-sm focus:shadow-stripe-focus"></div>
+                            <div class="relative group"><i class="fa-solid fa-dna absolute left-4 top-3.5 text-indigo-300 
+                                dark:text-gray-400 group-focus-within:text-stripe-blurple transition-colors z-20"></i><input v-model="loginForm.password" type="password" placeholder="輸入大腦存取密碼" required class="w-full bg-white/80 backdrop-blur-sm dark:bg-stripe-darkCard border border-indigo-100 dark:border-stripe-darkBorder focus:border-stripe-blurple text-indigo-950 dark:text-white rounded-full pl-11 pr-4 py-3 text-sm outline-none transition-all placeholder-indigo-300 shadow-sm focus:shadow-stripe-focus"></div>
+                        </div>
+                        <button type="submit" :disabled="isLoggingIn" class="w-48 mx-auto mt-12 py-3.5 bg-gradient-to-r 
+                        from-stripe-blurple to-indigo-600 hover:from-[#5446E5] hover:to-indigo-700 text-white rounded-full 
+                        font-bold shadow-[0_4px_15px_rgba(99,91,255,0.3)] transition-all flex items-center justify-center 
+                        gap-2 disabled:opacity-70 disabled:cursor-not-allowed">
+                            <span v-if="!isLoggingIn" class="flex items-center gap-2">啟動神經網絡連結 <i class="fa-solid fa-arrow-right text-xs"></i></span>
+                            <span v-else class="flex items-center gap-2"><i class="fa-solid fa-circle-notch fa-spin"></i> 同步中...</span>
+                        </button>
+                    </form>
+                </div>
+            </div>
+            <!-- ================= 主畫面 ================= -->
+            <div v-else class="flex flex-col h-full w-full relative bg-transparent">
+                <!-- 頭部導覽列 -->
+                <header class="glass-panel dark:bg-stripe-dark border-b border-white/50 dark:border-stripe-darkBorder 
+                text-indigo-950 dark:text-white pt-5 pb-4 px-5 flex items-center justify-between shrink-0 relative 
+                transition-colors duration-300 z-20">
+                    <div class="flex items-center gap-3">
+                        <div class=" bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-stripe-darkCard dark:to-gray-800 dark:border-gray-700 rounded-xl flex items-center justify-center shrink-0 shadow-sm overflow-hidden"><img src="img/aiimg.png" alt="AI" class="w-9 h-9 object-contain"></div>
+                        <div><h1 class="text-base font-extrabold tracking-tight leading-tight">{{ headerTitle }}</h1><p class="text-indigo-500/80 font-bold dark:text-gray-400 text-[10px]">{{ headerSubtitle }}</p></div>
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0">
+                        <button @click="toggleDarkMode" class="w-8 h-8 rounded-full bg-white dark:bg-gray-800 border border-indigo-100 dark:border-gray-700 hover:bg-indigo-50 dark:hover:bg-gray-700 text-stripe-blurple dark:text-gray-400 flex items-center justify-center transition-colors shadow-sm"><i class="fa-solid" :class="isDarkMode ? 'fa-sun' : 'fa-moon'"></i></button>
+                        <button @click="showLogoutOverlay = true" class="w-8 h-8 rounded-full bg-white dark:bg-gray-800 border border-indigo-100 dark:border-gray-700 hover:bg-rose-50 dark:hover:bg-red-900/30 hover:text-rose-500 dark:hover:border-red-800/50 text-stripe-blurple dark:text-gray-400 flex items-center justify-center transition-colors shadow-sm"><i class="fa-solid fa-arrow-right-from-bracket text-xs"></i></button>
+                    </div>
+                </header>
+                <transition name="toast">
+                    <div v-if="toastMessage" class="absolute bottom-24 left-1/2 bg-indigo-950 dark:bg-white text-white dark:text-gray-900 px-4 py-2.5 rounded-full text-xs font-semibold shadow-stripe z-50 whitespace-nowrap flex items-center gap-2" style="transform: translateX(-50%);">
+                        <i class="fa-solid fa-circle-check text-emerald-400 dark:text-emerald-500"></i> {{ toastMessage }}
+                    </div>
+                </transition>
+                <div class="flex-1 overflow-hidden relative z-10 transition-colors duration-300">
+                    <!-- ================= Tab 1: 保障與理賠 ================= -->
+                    <transition name="fade">
+                        <div v-show="activeTab === 'coverage'" class="absolute inset-0 flex flex-col h-full bg-gradient-to-b from-indigo-50/30 to-transparent dark:bg-transparent pb-[80px]">
+                            
+                            <!-- 智能問答 -->
+                            <div class="flex-1 overflow-hidden flex flex-col relative pt-0">
+                                <!-- 聊天背景浮水印 -->
+                                <div class="absolute inset-0 flex items-center justify-center pointer-events-none z-0 opacity-[0.06] dark:opacity-[0.04]">
+                                    <img src="img/aiimg.png" alt="AI Background" class="w-64 h-64 sm:w-80 sm:h-80 object-contain">
+                                </div>
+                                <div ref="chatContainer" class="flex-1 overflow-y-auto no-scrollbar p-4 space-y-5 relative z-10">
+                                    <div v-for="(msg, index) in messages" :key="index" class="flex flex-col chat-bubble-enter-active" :class="msg.role === 'user' ? 'items-end' : 'items-start'">
+                                        <div class="flex items-end gap-2 max-w-[90%]">
+                                            <div v-if="msg.role === 'bot'" class="w-8 h-8 rounded-full bg-gradient-to-br from-stripe-blurple to-purple-500 dark:bg-stripe-darkCard border border-white/20 dark:border-gray-700 text-white flex items-center justify-center flex-shrink-0 shadow-sm mb-1 overflow-hidden"><img src="img/aiimg.png" alt="AI" class="w-5 h-5 object-contain"></div>
+                                            <div class="px-4 py-3 shadow-sm text-sm w-full font-medium" :class="msg.role === 'user' ? 'bg-gradient-to-r from-stripe-blurple to-indigo-500 text-white rounded-2xl rounded-tr-sm shadow-[0_4px_15px_rgba(99,91,255,0.2)]' : 'bg-white/95 backdrop-blur-sm dark:bg-stripe-darkCard text-slate-800 dark:text-gray-200 rounded-2xl rounded-tl-sm border border-indigo-50 dark:border-stripe-darkBorder'">
+                                                <div v-if="msg.attachment" class="rounded-lg p-2.5 mb-2 flex items-center gap-2 text-xs bg-black/10 dark:bg-gray-800 border border-white/20 dark:border-gray-700"><i class="fa-solid fa-file-invoice text-base opacity-80"></i><span class="truncate max-w-[150px]">{{ msg.attachment.name }}</span></div>
+                                                <p class="whitespace-pre-line leading-relaxed" v-if="msg.text" v-html="msg.text"></p>
+                                                
+                                                <!-- 理賠試算結果 -->
+                                                <div v-if="msg.claimsData" class="mt-3 flex flex-col gap-2">
+                                                    <div v-for="(claim, idx) in msg.claimsData" :key="idx" class="bg-indigo-50/50 dark:bg-gray-800/50 border border-indigo-100/60 dark:border-gray-700 rounded-xl p-3 relative overflow-hidden">
+                                                        <div class="absolute left-0 top-0 bottom-0 w-1 bg-teal-400"></div>
+                                                        <div class="pl-2">
+                                                            <div class="text-[10px] text-indigo-500 dark:text-gray-400 mb-1 flex items-center gap-1 font-bold"><i class="fa-regular fa-building"></i> {{ claim.company }}</div>
+                                                            <div class="flex justify-between items-center gap-4 w-full">
+                                                                <div class="w-full flex-1 min-w-0"><seamless-action-item :item-data="{ id: claim.product, name: claim.product, company: claim.company }" :display-text="claim.product" text-class="text-sm font-extrabold text-indigo-950 dark:text-gray-200" @view="openProductModal" @compare="addToCompare" @action-click="openProductModal(claim.product)"></seamless-action-item></div>
+                                                                <div v-if="claim.amount" class="text-xs font-bold text-teal-700 dark:text-teal-400 bg-teal-100/50 dark:bg-teal-900/30 px-2 py-1 rounded-md whitespace-nowrap shrink-0">{{ claim.amount }}</div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- 解析單據結果 -->
+                                                <div v-if="msg.estimatedClaim" class="mt-4 bg-white dark:bg-stripe-darkCard border border-indigo-100/80 dark:border-gray-700 rounded-2xl overflow-hidden shadow-sm">
+                                                    <div class="bg-gradient-to-r from-teal-50 to-emerald-50 dark:bg-gray-800/80 p-3 border-b border-teal-100/50 dark:border-gray-700 flex justify-between items-center">
+                                                        <span class="font-bold text-teal-900 dark:text-gray-200 text-xs flex items-center gap-1.5"><i class="fa-solid fa-sack-dollar text-teal-500"></i> 預估理賠總額</span>
+                                                        <span class="text-base font-black text-teal-600 dark:text-teal-400">{{ msg.estimatedClaim.total }}</span>
+                                                    </div>
+                                                    <div class="p-3 space-y-2">
+                                                        <div v-for="(item, idx) in msg.estimatedClaim.breakdown" :key="idx" class="flex justify-between items-center text-xs border-b border-indigo-50 dark:border-gray-800 pb-2 last:border-0 last:pb-0">
+                                                            <div class="flex-1 min-w-0 pr-2">
+                                                                <div class="font-bold text-slate-700 dark:text-gray-300">{{ item.name }}</div>
+                                                                <div class="flex items-center gap-1 mt-0.5 w-full"><i class="fa-regular fa-building text-[9px] text-indigo-400 shrink-0"></i><div class="flex-1 min-w-0"><seamless-action-item :item-data="{ id: item.source, name: item.source, company: '' }" :display-text="item.source + (item.policyNumber ? ' - ' + item.policyNumber : '')" text-class="text-[10px] text-indigo-500/80 dark:text-gray-400 font-bold" @view="openProductModal" @compare="addToCompare" @action-click="openProductModal(item.source)"></seamless-action-item></div></div>
+                                                            </div>
+                                                            <div class="font-bold text-indigo-950 dark:text-gray-200 shrink-0">{{ item.amount }}</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- 比較專案結果 -->
+                                                <div v-if="msg.compareData" class="mt-4 bg-white dark:bg-stripe-darkCard border border-indigo-100/80 dark:border-gray-700 rounded-2xl overflow-hidden shadow-sm">
+                                                    <div class="bg-indigo-50/50 dark:bg-gray-800/80 p-3 border-b border-indigo-100/50 dark:border-gray-700 flex items-center gap-1.5">
+                                                        <i class="fa-solid fa-code-compare text-stripe-blurple"></i><span class="font-extrabold text-indigo-950 dark:text-gray-200 text-xs">方案對比亮點</span>
+                                                    </div>
+                                                    <div class="grid grid-cols-3 gap-2 px-3 py-2 bg-slate-50 dark:bg-gray-800/50 text-[10px] font-bold text-slate-500 dark:text-gray-400 border-b border-indigo-50 dark:border-gray-700 text-center">
+                                                        <div class="text-left">比較項目</div>
+                                                        <div class="text-indigo-600 dark:text-indigo-400 truncate">{{ msg.compareData.prod1.name }}</div>
+                                                        <div class="text-teal-600 dark:text-teal-400 truncate">{{ msg.compareData.prod2.name }}</div>
+                                                    </div>
+                                                    <div class="p-3 space-y-2">
+                                                        <div v-for="(row, idx) in msg.compareData.rows" :key="idx" class="grid grid-cols-3 gap-2 text-xs border-b border-indigo-50 dark:border-gray-800 pb-2 last:border-0 last:pb-0 items-center text-center">
+                                                            <div class="font-bold text-slate-700 dark:text-gray-300 text-left truncate">{{ row.label }}</div>
+                                                            <div class="font-bold text-indigo-950 dark:text-gray-200" v-html="highlightDiff(row.val1)"></div>
+                                                            <div class="font-bold text-indigo-950 dark:text-gray-200" v-html="highlightDiff(row.val2)"></div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="grid grid-cols-2 gap-2 p-2 border-t border-indigo-50 dark:border-gray-700 bg-indigo-50/30 dark:bg-gray-800/30">
+                                                        <button @click="openProductModal(msg.compareData.prod1.id)" class="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 hover:text-stripe-blurple transition-colors py-1.5 px-3 bg-white dark:bg-gray-800 rounded-full border border-indigo-100 dark:border-gray-700 shadow-sm">查看專案 A</button>
+                                                        <button @click="openProductModal(msg.compareData.prod2.id)" class="text-[10px] font-bold text-teal-600 dark:text-teal-400 hover:text-teal-500 transition-colors py-1.5 px-3 bg-white dark:bg-gray-800 rounded-full border border-teal-100 dark:border-gray-700 shadow-sm">查看專案 B</button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <span class="text-[10px] text-indigo-400 dark:text-gray-400 mt-1.5 font-bold" :class="msg.role === 'user' ? 'mr-2' : 'ml-10'">{{ msg.time }}</span>
+                                    </div>
+                                    <div v-if="isTyping" class="flex items-start gap-2 max-w-[80%] items-end">
+                                        <div class="w-8 h-8 rounded-full bg-gradient-to-br from-stripe-blurple to-purple-500 dark:bg-stripe-darkCard border border-white/20 dark:border-gray-700 text-white flex items-center justify-center flex-shrink-0 shadow-sm mb-1 overflow-hidden"><img src="img/aiimg.png" alt="AI" class="w-5 h-5 object-contain"></div>
+                                        <div class="bg-white/95 dark:bg-stripe-darkCard px-4 py-3.5 rounded-2xl rounded-tl-sm shadow-sm border border-indigo-50 dark:border-stripe-darkBorder flex gap-1">
+                                            <div class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce"></div><div class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style="animation-delay: 0.15s"></div><div class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style="animation-delay: 0.3s"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="glass-panel dark:bg-stripe-dark border-t border-white/50 dark:border-stripe-darkBorder p-3 shrink-0 rounded-t-2xl sm:rounded-none z-20">
+                                    <div id="tour-quick-queries" class="mb-3 flex flex-nowrap overflow-x-auto no-scrollbar gap-2 pb-1 cursor-grab active:cursor-grabbing prevent-select" ref="quickQueryContainer" @mousedown="startDrag" @mousemove="onDrag" @mouseup="stopDrag" @mouseleave="stopDrag">
+                                        <button v-for="query in quickQueries" :key="query" @click="handleQuickQuery(query)" class="whitespace-nowrap px-3.5 py-1.5 bg-white dark:bg-gray-800 text-indigo-700 dark:text-gray-300 text-xs font-bold rounded-full border border-indigo-100 dark:border-gray-700 flex items-center gap-1.5 select-none hover:bg-indigo-50 hover:border-stripe-blurple dark:hover:bg-gray-700 transition-colors shadow-sm"><i class="fa-solid fa-bolt text-stripe-blurple"></i> {{ query }}</button>
+                                    </div>
+                                    <form id="tour-chat-input" @submit.prevent="sendMessage(userInput)" class="flex gap-2 relative items-center">
+                                        <button type="button" @click="triggerChatFileUpload" class="w-10 h-10 shrink-0 text-indigo-400 hover:text-stripe-blurple dark:hover:text-stripe-blurple hover:bg-white dark:hover:bg-gray-800 rounded-full flex items-center justify-center transition-colors shadow-sm bg-indigo-50/50 dark:bg-transparent"><i class="fa-solid fa-paperclip text-lg"></i></button>
+                                        <input type="file" ref="chatFileInput" class="hidden" @change="handleChatFileUpload" accept="image/*,.pdf,.doc,.docx">
+                                        <div class="flex-1 bg-white/80 backdrop-blur dark:bg-stripe-darkBg rounded-full flex items-center relative overflow-hidden transition-shadow focus-within:ring-2 focus-within:ring-stripe-blurple/50 border border-indigo-100 dark:border-stripe-darkBorder shadow-sm">
+                                            <input type="text" v-model="userInput" :placeholder="isRecording ? '🎙️ 聆聽中...' : '輸入問題...'" class="w-full bg-transparent border-none px-4 py-2.5 text-sm focus:outline-none h-11 text-indigo-950 dark:text-white placeholder-indigo-300">
+                                        </div>
+                                        <button type="button" @click="toggleVoiceInput" class="w-10 h-10 shrink-0 rounded-full flex items-center justify-center transition-all border shadow-sm" :class="isRecording ? 'bg-rose-50 dark:bg-red-900/30 text-rose-500 border-rose-200 dark:border-red-800 animate-pulse' : 'bg-white dark:bg-stripe-darkCard text-indigo-500 dark:text-gray-400 border-indigo-100 dark:border-gray-700 hover:text-stripe-blurple hover:bg-indigo-50'"><i class="fa-solid" :class="isRecording ? 'fa-microphone-lines' : 'fa-microphone text-base'"></i></button>
+                                        <button type="submit" :disabled="(!userInput?.trim() && !chatAttachment) || isTyping" class="bg-stripe-blurple disabled:bg-indigo-200 dark:disabled:bg-gray-700 text-white w-10 h-10 shrink-0 rounded-full flex items-center justify-center shadow-[0_4px_15px_rgba(99,91,255,0.3)] transition-colors"><i class="fa-solid fa-paper-plane text-sm"></i></button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </transition>
+                    <!-- ================= Tab: 理賠試算 ================= -->
+                    <transition name="fade">
+                        <div v-show="activeTab === 'claims'" class="absolute inset-0 flex flex-col h-full bg-gradient-to-b from-indigo-50/30 to-transparent dark:bg-transparent pb-[80px]">
+                            <div class="flex-1 overflow-y-auto no-scrollbar p-4 pt-3">
+                                <h2 class="text-base font-extrabold text-indigo-950 dark:text-white mb-2">選擇事故類型</h2>
+                                <div class="grid grid-cols-3 gap-3 mb-3">
+                                    <div v-for="incident in claimIncidents" :key="incident.id" @click="selectedIncident = incident" class="cursor-pointer border rounded-2xl p-4 flex flex-col items-center text-center transition-all shadow-sm" :class="selectedIncident?.id === incident.id ? 'border-stripe-blurple bg-indigo-50 dark:bg-indigo-900/20 shadow-md ring-1 ring-stripe-blurple/20' : 'border-indigo-50 dark:border-gray-700 bg-white dark:bg-stripe-darkCard hover:shadow-md hover:border-indigo-200'">
+                                        <div class="w-10 h-10 rounded-full flex items-center justify-center text-lg mb-2 transition-colors" :class="selectedIncident?.id === incident.id ? 'bg-stripe-blurple text-white shadow-md' : incident.bgClass + ' ' + incident.colorClass + ' dark:bg-gray-800 dark:text-gray-400'"><i :class="incident.icon"></i></div>
+                                        <h3 class="text-xs font-bold text-slate-800 dark:text-gray-200">{{ incident.name }}</h3>
+                                    </div>
+                                </div>
+                                <transition name="fade">
+                                    <div v-if="selectedIncident" class="space-y-6">
+                                        <!-- 選擇客戶 -->
+                                        <div>
+                                            <h2 class="text-base font-extrabold text-indigo-950 dark:text-white mb-2">選擇試算客戶</h2>
+                                            <div v-if="!selectedClaimCustomer" class="relative">
+                                                <i class="fa-solid fa-magnifying-glass absolute left-4 top-3.5 text-indigo-400"></i>
+                                                <input type="text" v-model="claimSearchQuery" placeholder="搜尋客戶姓名或電話..." class="w-full bg-white/90 backdrop-blur dark:bg-stripe-darkCard border border-indigo-100 dark:border-gray-700 text-indigo-950 dark:text-white rounded-full pl-10 pr-4 py-3 text-sm shadow-sm focus:outline-none focus:border-stripe-blurple focus:shadow-stripe-focus transition-all placeholder-indigo-300">
+                                                <div v-if="claimSearchQuery" class="absolute w-full mt-2 bg-white dark:bg-stripe-darkCard border border-indigo-100 dark:border-gray-700 rounded-xl shadow-stripe max-h-48 overflow-y-auto z-50">
+                                                    <button v-for="c in claimFilteredCustomers" :key="c.id" @click="selectedClaimCustomer = c; claimSearchQuery = ''" class="w-full text-left px-4 py-3 border-b border-indigo-50 dark:border-gray-800 hover:bg-indigo-50/50 dark:hover:bg-gray-800 flex items-center justify-between transition-colors">
+                                                        <div class="flex items-center gap-3">
+                                                            <div class="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-100 to-purple-100 dark:bg-gray-800 flex items-center justify-center text-stripe-blurple shadow-sm"><i class="fa-solid fa-user text-xs"></i></div>
+                                                            <div><div class="font-extrabold text-slate-800 dark:text-gray-200 text-sm">{{ c.name }}</div><div class="text-[11px] font-bold text-indigo-400">{{ c.phone }}</div></div>
+                                                        </div>
+                                                        <i class="fa-solid fa-chevron-right text-indigo-300 dark:text-gray-600 text-xs"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div v-else class="bg-white/95 backdrop-blur dark:bg-stripe-darkCard border border-stripe-blurple/50 rounded-2xl shadow-sm p-4 flex items-center justify-between">
+                                                <div class="flex items-center gap-3">
+                                                    <div class="w-10 h-10 bg-gradient-to-br from-indigo-100 to-purple-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center shrink-0 shadow-sm"><i class="fa-solid fa-user-check text-stripe-blurple text-base"></i></div>
+                                                    <div><div class="font-extrabold text-indigo-950 dark:text-white text-base">{{ selectedClaimCustomer.name }}</div><div class="text-[11px] text-indigo-500 dark:text-gray-400 font-bold tracking-wide mt-0.5">{{ selectedClaimCustomer.phone }}</div></div>
+                                                </div>
+                                                <button @click="selectedClaimCustomer = null; claimCalcStatus = 'idle'; estimatedClaimResult = null;" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-rose-50 dark:hover:bg-red-900/30 text-rose-400 hover:text-rose-500 transition-colors"><i class="fa-solid fa-rotate-right text-sm"></i></button>
+                                            </div>
+                                        </div>
+
+                                        <!-- 匹配保單結果與解析 -->
+                                        <transition name="fade">
+                                            <div v-if="selectedClaimCustomer" class="space-y-4">
+                                                <h2 class="text-base font-extrabold text-indigo-950 dark:text-white mb-2 pt-2 border-t border-indigo-100/60 dark:border-gray-800">AI 智能理賠解析 <i class="fa-solid fa-wand-magic-sparkles text-amber-500 ml-1 text-sm"></i></h2>
+                                                <div v-if="claimCalcStatus === 'idle'">
+                                                    <input type="file" id="claimCalcFileInput" class="hidden" accept="image/*,application/pdf" @change="handleClaimCalcUpload">
+                                                    <label for="claimCalcFileInput" class="flex flex-col items-center justify-center border-2 border-dashed border-indigo-200 dark:border-gray-600 bg-white/80 dark:bg-stripe-darkCard rounded-2xl p-8 text-center cursor-pointer hover:bg-indigo-50/50 dark:hover:bg-gray-800 transition-colors shadow-sm group">
+                                                        <div class="w-12 h-12 bg-gradient-to-br from-indigo-100 to-purple-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform shadow-sm"><i class="fa-solid fa-cloud-arrow-up text-xl text-stripe-blurple"></i></div>
+                                                        <p class="text-sm font-bold text-indigo-900 dark:text-gray-300">點擊上傳醫療單據讓 AI 解析</p>
+                                                    </label>
+                                                </div>
+                                                <div v-else-if="claimCalcStatus === 'processing'" class="flex flex-col items-center justify-center p-8 bg-white/90 dark:bg-stripe-darkCard border border-indigo-50 dark:border-gray-700 rounded-2xl shadow-sm">
+                                                    <i class="fa-solid fa-circle-notch fa-spin text-3xl text-stripe-blurple mb-3"></i><p class="text-sm font-bold text-indigo-500 dark:text-gray-400">Gemini AI 正在解析單據...</p>
+                                                </div>
+                                                <div v-else-if="claimCalcStatus === 'done'" class="bg-white dark:bg-stripe-darkCard border border-indigo-100/60 dark:border-gray-700 rounded-2xl overflow-hidden shadow-[0_8px_30px_rgba(99,91,255,0.08)]">
+                                                    <div class="bg-gradient-to-r from-teal-50 to-emerald-50 dark:bg-gray-800/80 p-4 border-b border-teal-100/50 dark:border-gray-700 flex justify-between items-center"><span class="font-extrabold text-teal-900 dark:text-white text-sm flex items-center gap-2"><i class="fa-solid fa-sack-dollar text-teal-500"></i> 預估理賠總額</span><span class="text-xl font-black text-teal-600 dark:text-teal-400">{{ estimatedClaimResult.total }}</span></div>
+                                                    <div class="p-4 space-y-3"><div v-for="(item, idx) in estimatedClaimResult.breakdown" :key="idx" class="flex justify-between items-center text-xs border-b border-indigo-50 dark:border-gray-800 pb-2.5 last:border-0 last:pb-0"><div class="flex-1 min-w-0 pr-3"><div class="font-bold text-slate-800 dark:text-gray-200">{{ item.name }}</div><div class="flex items-center gap-1.5 mt-1 w-full"><i class="fa-regular fa-building text-[10px] text-indigo-400 shrink-0"></i><div class="flex-1 min-w-0"><seamless-action-item :item-data="{ id: item.source, name: item.source, company: '' }" :display-text="item.source + (item.policyNumber ? ' - ' + item.policyNumber : '')" text-class="text-[11px] text-indigo-500/80 dark:text-gray-400 font-bold" @view="openProductModal" @compare="addToCompare" @action-click="openProductModal(item.source)"></seamless-action-item></div></div></div><div class="font-bold text-indigo-950 dark:text-white text-sm shrink-0">{{ item.amount }}</div></div></div>
+                                                    <div class="p-3 text-center border-t border-indigo-50 dark:border-gray-800 bg-indigo-50/30 dark:bg-gray-800/30"><button @click="resetClaimCalc" class="text-xs text-indigo-500 dark:text-gray-400 font-bold hover:text-stripe-blurple dark:hover:text-stripe-blurple flex items-center justify-center gap-1.5 mx-auto transition-colors"><i class="fa-solid fa-rotate-right"></i> 重新上傳單據</button></div>
+                                                </div>
+
+                                                <div class="mt-6 border-t border-indigo-100/60 dark:border-gray-700 pt-2">
+                                                    <h2 class="text-base font-extrabold text-indigo-950 dark:text-white mb-2">符合保單與應備文件</h2>
+                                                    
+                                                    <div v-if="matchedClaimCompanies.length === 0" class="text-center py-8 border-2 border-dashed border-indigo-200 dark:border-gray-700 rounded-2xl bg-white/50 dark:bg-transparent">
+                                                        <i class="fa-solid fa-folder-open text-3xl text-indigo-300 dark:text-gray-600 mb-2"></i>
+                                                        <p class="text-sm font-bold text-indigo-500 dark:text-gray-400">該客戶目前無符合此事故類型的有效保單</p>
+                                                    </div>
+
+                                                    <div v-for="comp in matchedClaimCompanies" :key="comp.company" class="bg-white/90 backdrop-blur dark:bg-stripe-darkCard border rounded-2xl overflow-hidden shadow-sm transition-all duration-300 mb-2" :class="expandedClaimCompanies[comp.company] ? 'border-stripe-blurple ring-1 ring-stripe-blurple/20 shadow-md' : 'border-indigo-50 dark:border-gray-700 hover:border-stripe-blurple/50'">
+                                                        <div @click="toggleClaimCompany(comp.company)" class="bg-indigo-50/50 dark:bg-gray-800/80 px-4 py-3 border-b border-indigo-50 dark:border-gray-700 flex items-center justify-between cursor-pointer hover:bg-indigo-100/50 dark:hover:bg-gray-800 transition-colors group">
+                                                            <div class="flex items-center gap-2">
+                                                                <i class="fa-regular fa-building text-stripe-blurple"></i>
+                                                                <span class="font-extrabold text-indigo-950 dark:text-white text-sm">{{ comp.company }}</span>
+                                                            </div>
+                                                            <div class="w-6 h-6 flex items-center justify-center rounded-full text-indigo-400 group-hover:text-stripe-blurple transition-colors shrink-0">
+                                                                <i class="fa-solid fa-chevron-down text-[10px] transition-transform duration-300" :class="{'rotate-180': expandedClaimCompanies[comp.company]}"></i>
+                                                            </div>
+                                                        </div>
+                                                        <div v-show="expandedClaimCompanies[comp.company]" class="p-4 pt-2 space-y-4 bg-white/50 dark:bg-transparent">
+                                                            <div>
+                                                                <h4 class="text-[10px] font-extrabold text-indigo-400 dark:text-gray-500 uppercase tracking-widest mb-2">符合保單</h4>
+                                                                <div class="flex flex-wrap gap-2">
+                                                                    <span v-for="pol in comp.policyNumbers" :key="pol" class="bg-indigo-50 dark:bg-gray-800 text-indigo-700 dark:text-gray-300 px-2.5 py-1.5 rounded-lg border border-indigo-100/50 dark:border-gray-700 text-[11px] font-bold">{{ pol }}</span>
+                                                                </div>
+                                                            </div>
+                                                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-0 border-t border-indigo-50 dark:border-gray-800">
+                                                                <div>
+                                                                    <h4 class="text-[10px] font-extrabold text-teal-500 dark:text-teal-400 uppercase tracking-widest mb-2 flex items-center gap-1.5"><i class="fa-solid fa-check-circle"></i> 可申請項目</h4>
+                                                                    <div class="flex flex-wrap gap-1.5">
+                                                                        <span v-for="item in comp.items" :key="item" class="bg-teal-50/50 dark:bg-teal-900/20 px-2.5 py-1 rounded-md border border-teal-100/50 dark:border-teal-800/50 text-[11px] font-bold text-teal-700 dark:text-teal-400">{{ item }}</span>
+                                                                    </div>
+                                                                </div>
+                                                                <div>
+                                                                    <h4 class="text-[10px] font-extrabold text-amber-500 dark:text-amber-400 uppercase tracking-widest mb-2 flex items-center gap-1.5"><i class="fa-solid fa-folder-open"></i> 應備文件</h4>
+                                                                    <div class="space-y-2">
+                                                                        <div v-for="doc in comp.docs" :key="doc.title" class="flex items-start gap-2 bg-slate-50 dark:bg-gray-800/50 px-2 py-1 rounded-lg border border-slate-100 dark:border-gray-700/50">
+                                                                            <i class="fa-regular fa-square-check text-amber-500  text-xs"></i>
+                                                                            <div>
+                                                                                <div class="text-[11px] font-bold text-slate-700 dark:text-gray-200 leading-tight">{{ doc.title }}</div>
+                                                                                <div v-if="doc.desc" class="text-[10px] text-indigo-400 dark:text-gray-500 mt-0.5 font-medium">{{ doc.desc }}</div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </transition>
+                                    </div>
+                                </transition>
+                            </div>
+                        </div>
+                    </transition>
+                    <!-- ================= Tab 2: 客戶分析 ================= -->
+                    <transition name="fade">
+                        <div v-show="activeTab === 'gaps'" class="absolute inset-0 overflow-y-auto no-scrollbar p-4 pb-[100px] bg-gradient-to-b from-indigo-50/30 to-transparent dark:bg-transparent">
+                            <div class="mb-6 relative z-20">
+                                <div v-if="!selectedCustomer && !isAddingCustomer" class="flex gap-2 relative">
+                                    <div class="relative flex-1">
+                                        <i class="fa-solid fa-magnifying-glass absolute left-4 top-3.5 text-indigo-400"></i>
+                                        <input type="text" v-model="searchQuery" placeholder="搜尋客戶姓名或電話..." class="w-full bg-white/90 backdrop-blur dark:bg-stripe-darkCard border border-indigo-100 dark:border-gray-700 text-indigo-950 dark:text-white rounded-full pl-10 pr-4 py-3 text-sm shadow-sm focus:outline-none focus:border-stripe-blurple focus:shadow-stripe-focus transition-all placeholder-indigo-300">
+                                        <div v-if="searchQuery" class="absolute w-full mt-2 bg-white dark:bg-stripe-darkCard border border-indigo-100 dark:border-gray-700 rounded-xl shadow-stripe max-h-48 overflow-y-auto z-50">
+                                            <button v-for="c in filteredCustomers" :key="c.id" @click="selectCustomer(c)" class="w-full text-left px-4 py-3 border-b border-indigo-50 dark:border-gray-800 hover:bg-indigo-50/50 dark:hover:bg-gray-800 flex items-center justify-between transition-colors"><div class="flex items-center gap-3"><div class="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-100 to-purple-100 dark:bg-gray-800 flex items-center justify-center text-stripe-blurple shadow-sm"><i class="fa-solid fa-user text-xs"></i></div><div><div class="font-extrabold text-slate-800 dark:text-gray-200 text-sm">{{ c.name }}</div><div class="text-[11px] font-bold text-indigo-400">{{ c.phone }}</div></div></div><i class="fa-solid fa-chevron-right text-indigo-300 dark:text-gray-600 text-xs"></i></button>
+                                        </div>
+                                    </div>
+                                    <button @click="startAddCustomer" class="shrink-0 px-4 py-2 bg-gradient-to-r from-stripe-blurple to-indigo-500 hover:from-[#5446E5] hover:to-indigo-600 text-white rounded-full text-sm font-bold shadow-[0_4px_15px_rgba(99,91,255,0.3)] transition-all flex items-center gap-2"><i class="fa-solid fa-user-plus"></i> <span class="hidden sm:inline">新增</span></button>
+                                </div>
+                                <div v-else-if="isAddingCustomer" class="bg-white/95 backdrop-blur dark:bg-stripe-darkCard border border-indigo-100 dark:border-gray-700 rounded-2xl shadow-[0_8px_30px_rgba(99,91,255,0.06)] overflow-hidden transition-all duration-300 relative">
+                                    <div class="p-5 bg-white/80 dark:bg-stripe-darkCard border-t border-indigo-50 dark:border-gray-800">
+                                        <h3 class="font-extrabold text-indigo-950 dark:text-white text-base mb-4 flex items-center gap-2"><i class="fa-solid fa-user-plus text-stripe-blurple"></i> 建立新客戶檔案</h3>
+                                        <div class="grid grid-cols-2 gap-4">
+                                            <div class="col-span-2 sm:col-span-1"><label class="block text-[10px] uppercase font-bold text-indigo-500/80 mb-1.5">客戶姓名 (必填)</label><input v-model="newCustomerData.name" type="text" placeholder="例: 王大明" class="w-full bg-white dark:bg-stripe-darkBg border border-indigo-100 dark:border-gray-700 text-slate-800 dark:text-white rounded-full px-3 py-2 text-xs focus:border-stripe-blurple focus:shadow-stripe-focus outline-none transition-shadow shadow-sm"></div>
+                                            <div class="col-span-2 sm:col-span-1"><label class="block text-[10px] uppercase font-bold text-indigo-500/80 mb-1.5">身分證字號</label><input v-model="newCustomerData.idNumber" type="text" class="w-full bg-white dark:bg-stripe-darkBg border border-indigo-100 dark:border-gray-700 text-slate-800 dark:text-white rounded-full px-3 py-2 text-xs focus:border-stripe-blurple focus:shadow-stripe-focus outline-none transition-shadow shadow-sm"></div>
+                                            <div class="col-span-2 sm:col-span-1"><label class="block text-[10px] uppercase font-bold text-indigo-500/80 mb-1.5">行動電話</label><input v-model="newCustomerData.phone" type="text" class="w-full bg-white dark:bg-stripe-darkBg border border-indigo-100 dark:border-gray-700 text-slate-800 dark:text-white rounded-full px-3 py-2 text-xs focus:border-stripe-blurple focus:shadow-stripe-focus outline-none transition-shadow shadow-sm"></div>
+                                            <div class="col-span-2 sm:col-span-1"><label class="block text-[10px] uppercase font-bold text-indigo-500/80 mb-1.5">出生年月日</label><input v-model="newCustomerData.birthday" type="date" class="w-full bg-white dark:bg-stripe-darkBg border border-indigo-100 dark:border-gray-700 text-slate-800 dark:text-white rounded-full px-3 py-2 text-xs focus:border-stripe-blurple focus:shadow-stripe-focus outline-none transition-shadow shadow-sm"></div>
+                                            <div class="col-span-2"><label class="block text-[10px] uppercase font-bold text-indigo-500/80 mb-1.5">電子信箱</label><input v-model="newCustomerData.email" type="email" class="w-full bg-white dark:bg-stripe-darkBg border border-indigo-100 dark:border-gray-700 text-slate-800 dark:text-white rounded-full px-3 py-2 text-xs focus:border-stripe-blurple focus:shadow-stripe-focus outline-none transition-shadow shadow-sm"></div>
+                                            <div class="col-span-2"><label class="block text-[10px] uppercase font-bold text-indigo-500/80 mb-1.5">通訊地址</label><input v-model="newCustomerData.address" type="text" class="w-full bg-white dark:bg-stripe-darkBg border border-indigo-100 dark:border-gray-700 text-slate-800 dark:text-white rounded-full px-3 py-2 text-xs focus:border-stripe-blurple focus:shadow-stripe-focus outline-none transition-shadow shadow-sm"></div>
+                                            <div class="col-span-2"><label class="block text-[10px] uppercase font-bold text-indigo-500/80 mb-1.5">備註</label><textarea v-model="newCustomerData.notes" rows="2" class="w-full bg-white dark:bg-stripe-darkBg border border-indigo-100 dark:border-gray-700 text-slate-800 dark:text-white rounded-lg px-3 py-2 text-xs focus:border-stripe-blurple focus:shadow-stripe-focus outline-none transition-shadow shadow-sm"></textarea></div>
+                                        </div>
+                                        <div class="flex gap-3 pt-4 mt-4 border-t border-indigo-50 dark:border-gray-800">
+                                            <button @click="cancelAddCustomer" class="flex-1 py-2.5 bg-white dark:bg-stripe-darkCard border border-indigo-100 dark:border-gray-700 text-slate-700 dark:text-gray-300 text-xs font-bold rounded-full shadow-sm hover:bg-indigo-50 dark:hover:bg-gray-800 transition-colors">取消</button>
+                                            <button @click="saveNewCustomer" class="flex-1 py-2.5 bg-stripe-blurple text-white text-xs font-bold rounded-full shadow-[0_4px_15px_rgba(99,91,255,0.3)] hover:bg-[#5446E5] transition-colors">建立檔案</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div v-else class="bg-white/95 backdrop-blur dark:bg-stripe-darkCard border border-indigo-100/60 dark:border-gray-700 rounded-2xl shadow-[0_8px_30px_rgba(99,91,255,0.06)] overflow-hidden transition-all duration-300 relative">
+                                    <div class="p-4 flex items-center justify-between cursor-pointer hover:bg-indigo-50/30 dark:hover:bg-gray-800 transition-colors relative" @click="toggleCustomerInfo">
+                                        <div class="absolute top-0 left-0 bottom-0 w-1.5 bg-gradient-to-b from-stripe-blurple to-fuchsia-500"></div>
+                                        <div class="flex items-center gap-3 relative z-10 pl-2">
+                                            <div class="w-10 h-10 bg-gradient-to-br from-indigo-100 to-purple-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center shrink-0 shadow-sm"><i class="fa-solid fa-user-check text-stripe-blurple text-base"></i></div>
+                                            <div><div class="font-extrabold text-indigo-950 dark:text-white text-base">{{ selectedCustomer.name }}</div><div class="text-[11px] text-indigo-500 dark:text-gray-400 font-bold tracking-wide mt-0.5">{{ selectedCustomer.phone }}</div></div>
+                                        </div>
+                                        <div class="flex items-center gap-2 relative z-10">
+                                            <button @click.stop="clearCustomer" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-indigo-100 dark:hover:bg-gray-700 text-indigo-400 hover:text-stripe-blurple dark:hover:text-gray-200 transition-colors"><i class="fa-solid fa-rotate-right text-xs"></i></button>
+                                            <div class="w-6 h-6 flex items-center justify-center"><i class="fa-solid fa-chevron-down transition-transform duration-300 text-indigo-400 text-xs" :class="{'rotate-180': isCustomerExpanded}"></i></div>
+                                        </div>
+                                    </div>
+                                    <div v-show="isCustomerExpanded" class="px-5 pb-5 bg-white/50 dark:bg-stripe-darkCard border-t border-indigo-50 dark:border-gray-800">
+                                        <div v-if="!isEditingCustomer" class="pt-4 space-y-4">
+                                            <div class="grid grid-cols-2 gap-y-5 gap-x-4 text-xs">
+                                                <div class="flex flex-col gap-1"><span class="text-indigo-400 text-[10px] uppercase font-bold tracking-wider">身分證字號</span><span class="font-bold text-slate-800 dark:text-gray-200">{{ selectedCustomer.idNumber || '未提供' }}</span></div>
+                                                <div class="flex flex-col gap-1"><span class="text-indigo-400 text-[10px] uppercase font-bold tracking-wider">年齡</span><span class="font-bold text-slate-800 dark:text-gray-200">{{ calculateAge(selectedCustomer.birthday) }}</span></div>
+                                                <div class="flex flex-col gap-1"><span class="text-indigo-400 text-[10px] uppercase font-bold tracking-wider">電子信箱</span><span class="font-bold text-slate-800 dark:text-gray-200">{{ selectedCustomer.email || '未提供' }}</span></div>
+                                                <div class="flex flex-col gap-1"><span class="text-indigo-400 text-[10px] uppercase font-bold tracking-wider">出生年月日</span><span class="font-bold text-slate-800 dark:text-gray-200">{{ selectedCustomer.birthday || '未提供' }}</span></div>
+                                                <div class="flex flex-col gap-1 col-span-2"><span class="text-indigo-400 text-[10px] uppercase font-bold tracking-wider">通訊地址</span><span class="font-bold text-slate-800 dark:text-gray-200">{{ selectedCustomer.address || '未提供' }}</span></div>
+                                                <div class="flex flex-col gap-1 col-span-2"><span class="text-indigo-400 text-[10px] uppercase font-bold tracking-wider">備註</span><span class="font-medium text-slate-700 dark:text-gray-300 leading-relaxed">{{ selectedCustomer.notes || '無' }}</span></div>
+                                            </div>
+                                            <div class="mt-2 pt-4 border-t border-indigo-50 dark:border-gray-800 flex justify-end">
+                                                <button @click="startEditCustomer" class="text-xs bg-white dark:bg-stripe-darkCard border border-indigo-100 dark:border-gray-700 text-indigo-700 dark:text-gray-300 hover:bg-indigo-50 dark:hover:bg-gray-800 px-4 py-2 rounded-full font-bold shadow-sm transition-colors">編輯資料</button>
+                                            </div>
+                                        </div>
+                                        <div v-else class="pt-4 space-y-4">
+                                            <div class="grid grid-cols-2 gap-4">
+                                                <div class="col-span-2 sm:col-span-1"><label class="block text-[10px] uppercase font-bold text-indigo-500/80 mb-1.5">客戶姓名</label><input v-model="editCustomerData.name" type="text" class="w-full bg-white dark:bg-stripe-darkBg border border-indigo-100 dark:border-gray-700 text-slate-800 dark:text-white rounded-full px-3 py-2 text-xs focus:border-stripe-blurple focus:shadow-stripe-focus outline-none shadow-sm"></div>
+                                                <div class="col-span-2 sm:col-span-1"><label class="block text-[10px] uppercase font-bold text-indigo-500/80 mb-1.5">身分證字號</label><input v-model="editCustomerData.idNumber" type="text" class="w-full bg-white dark:bg-stripe-darkBg border border-indigo-100 dark:border-gray-700 text-slate-800 dark:text-white rounded-full px-3 py-2 text-xs focus:border-stripe-blurple focus:shadow-stripe-focus outline-none shadow-sm"></div>
+                                                <div class="col-span-2 sm:col-span-1"><label class="block text-[10px] uppercase font-bold text-indigo-500/80 mb-1.5">行動電話</label><input v-model="editCustomerData.phone" type="text" class="w-full bg-white dark:bg-stripe-darkBg border border-indigo-100 dark:border-gray-700 text-slate-800 dark:text-white rounded-full px-3 py-2 text-xs focus:border-stripe-blurple focus:shadow-stripe-focus outline-none shadow-sm"></div>
+                                                <div class="col-span-2 sm:col-span-1"><label class="block text-[10px] uppercase font-bold text-indigo-500/80 mb-1.5">出生年月日</label><input v-model="editCustomerData.birthday" type="date" class="w-full bg-white dark:bg-stripe-darkBg border border-indigo-100 dark:border-gray-700 text-slate-800 dark:text-white rounded-full px-3 py-2 text-xs focus:border-stripe-blurple focus:shadow-stripe-focus outline-none shadow-sm"></div>
+                                                <div class="col-span-2"><label class="block text-[10px] uppercase font-bold text-indigo-500/80 mb-1.5">電子信箱</label><input v-model="editCustomerData.email" type="email" class="w-full bg-white dark:bg-stripe-darkBg border border-indigo-100 dark:border-gray-700 text-slate-800 dark:text-white rounded-full px-3 py-2 text-xs focus:border-stripe-blurple focus:shadow-stripe-focus outline-none shadow-sm"></div>
+                                                <div class="col-span-2"><label class="block text-[10px] uppercase font-bold text-indigo-500/80 mb-1.5">通訊地址</label><input v-model="editCustomerData.address" type="text" class="w-full bg-white dark:bg-stripe-darkBg border border-indigo-100 dark:border-gray-700 text-slate-800 dark:text-white rounded-full px-3 py-2 text-xs focus:border-stripe-blurple focus:shadow-stripe-focus outline-none shadow-sm"></div>
+                                                <div class="col-span-2"><label class="block text-[10px] uppercase font-bold text-indigo-500/80 mb-1.5">備註</label><textarea v-model="editCustomerData.notes" rows="2" class="w-full bg-white dark:bg-stripe-darkBg border border-indigo-100 dark:border-gray-700 text-slate-800 dark:text-white rounded-lg px-3 py-2 text-xs focus:border-stripe-blurple focus:shadow-stripe-focus outline-none shadow-sm"></textarea></div>
+                                            </div>
+                                            <div class="flex gap-3 pt-4 border-t border-indigo-50 dark:border-gray-800">
+                                                <button @click="cancelEditCustomer" class="flex-1 py-2.5 bg-white dark:bg-stripe-darkCard border border-indigo-100 dark:border-gray-700 text-slate-700 dark:text-gray-300 text-xs font-bold rounded-full shadow-sm hover:bg-indigo-50 dark:hover:bg-gray-800 transition-colors">取消</button>
+                                                <button @click="saveCustomerInfo" class="flex-1 py-2.5 bg-stripe-blurple text-white text-xs font-bold rounded-full shadow-[0_4px_15px_rgba(99,91,255,0.3)] hover:bg-[#5446E5] transition-colors">儲存</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- 新增保單與商品 (1對多) -->
+                            <transition name="fade">
+                                <div v-if="selectedCustomer">
+                                    <div class="bg-white/90 backdrop-blur dark:bg-stripe-darkCard rounded-2xl p-5 shadow-[0_8px_30px_rgba(99,91,255,0.06)] border border-indigo-50 dark:border-gray-700 mb-5 relative overflow-hidden">
+                                        <div class="absolute -right-10 -top-10 w-32 h-32 bg-teal-100/50 dark:bg-teal-900/10 rounded-full blur-3xl"></div>
+                                        <div class="flex justify-between items-start mb-6 relative z-10"><div><h2 class="font-extrabold text-indigo-950 dark:text-white text-lg tracking-tight mb-1">保障水位分析</h2><p class="text-[11px] text-indigo-400 font-bold">各項風險抵禦能力評估</p></div><div class="flex flex-col items-end"><div class="text-3xl font-black leading-none text-transparent bg-clip-text bg-gradient-to-r from-stripe-blurple to-teal-500">{{ selectedCustomer.score }}</div></div></div>
+                                        <div class="space-y-4 relative z-10"><div v-for="gap in selectedCustomer.gaps" :key="gap.name" class="group"><div class="flex justify-between text-xs mb-1.5 items-center"><span class="font-bold text-slate-700 dark:text-gray-300">{{ gap.name }}</span><span class="font-extrabold" :class="gap.percent < 50 ? 'text-rose-500' : gap.percent < 80 ? 'text-stripe-blurple' : 'text-teal-500'">{{ gap.percent }}%</span></div><div class="w-full bg-indigo-50 dark:bg-gray-800 rounded-full h-1.5 overflow-hidden"><div class="h-full rounded-full transition-all duration-1000 relative" :class="gap.percent < 50 ? 'bg-gradient-to-r from-rose-400 to-rose-500' : gap.percent < 80 ? 'bg-gradient-to-r from-indigo-400 to-stripe-blurple' : 'bg-gradient-to-r from-teal-400 to-emerald-500'" :style="{ width: gap.percent + '%' }"></div></div></div></div>
+                                        <div v-if="selectedCustomer.aiAnalysisText" class="mt-6 p-4 bg-gradient-to-r from-indigo-50/50 to-purple-50/50 dark:bg-gray-800/50 rounded-xl border border-indigo-100/50 dark:border-gray-700 text-sm text-slate-700 dark:text-gray-300 leading-relaxed whitespace-pre-line shadow-sm"><div class="font-extrabold text-stripe-blurple mb-2 flex items-center gap-2"><img src="img/aiimg.png" alt="AI" class="w-4 h-4 object-contain"> AI 專屬健診報告</div>{{ selectedCustomer.aiAnalysisText }}</div>
+                                        <div v-else-if="selectedCustomer.aiGood" class="mt-6 space-y-2 text-xs"><div class="bg-teal-50/30 dark:bg-gray-800 p-3 rounded-xl border border-teal-100/50 dark:border-gray-700 text-slate-700 dark:text-gray-300 leading-relaxed"><span class="font-extrabold text-teal-600 dark:text-teal-400 block mb-1 uppercase tracking-wider text-[10px]">優勢</span><span v-html="selectedCustomer.aiGood"></span></div><div class="bg-rose-50/30 dark:bg-gray-800 p-3 rounded-xl border border-rose-100/50 dark:border-gray-700 text-slate-700 dark:text-gray-300 leading-relaxed"><span class="font-extrabold text-rose-500 block mb-1 uppercase tracking-wider text-[10px]">風險</span><span v-html="selectedCustomer.aiBad"></span></div><div class="bg-indigo-50/30 dark:bg-gray-800 p-3 rounded-xl border border-indigo-100/50 dark:border-gray-700 text-slate-700 dark:text-gray-300 leading-relaxed"><span class="font-extrabold text-stripe-blurple block mb-1 uppercase tracking-wider text-[10px]">建議</span><span v-html="selectedCustomer.aiSuggestion"></span></div></div>
+                                    </div>
+                                    
+                                    <div class="mt-4 bg-white/90 backdrop-blur dark:bg-stripe-darkCard rounded-2xl p-5 shadow-[0_8px_30px_rgba(99,91,255,0.06)] border border-indigo-50 dark:border-gray-700">
+                                        <div class="flex justify-between items-center mb-4">
+                                            <h2 class="font-extrabold text-indigo-950 dark:text-white text-base">現有保單總覽</h2>
+                                            <button @click="handleAddPolicyClick" v-if="!showAddPolicyForm" class="text-xs bg-indigo-950 dark:bg-white text-white dark:text-gray-900 px-3 py-1.5 rounded-full font-bold shadow-[0_4px_10px_rgba(0,0,0,0.1)] hover:opacity-90 transition-opacity"><i class="fa-solid fa-plus mr-1"></i> 新增</button>
+                                        </div>
+                                        <div class="mb-4"><span class="text-[10px] text-indigo-400 dark:text-gray-400 font-bold inline-flex items-center gap-1.5"><i class="fa-solid fa-info-circle"></i> 提示：點擊保單可展開，長按「險種名稱」可加入比較或查看條款</span></div>
+                                        
+                                        <!-- 保單清單 -->
+                                        <div class="space-y-3 mb-4" v-if="selectedCustomer.policies && selectedCustomer.policies.length > 0">
+                                            <div v-for="policy in selectedCustomer.policies" :key="policy.id" class="bg-white dark:bg-stripe-darkCard border rounded-xl relative transition-all duration-300 group shadow-sm" :class="expandedPolicies[policy.id] ? 'border-stripe-blurple shadow-md ring-1 ring-stripe-blurple/20' : 'border-indigo-100/60 dark:border-gray-700 hover:border-stripe-blurple/50 dark:hover:border-gray-600'">
+                                                
+                                                <!-- 保單 Header -->
+                                                   <div @click="togglePolicy(policy.id)" class="p-4 cursor-pointer group">
+                                                    <div class="flex items-start justify-between mb-3">
+                                                        <div class="flex items-center gap-2">
+                                                            <span class="bg-indigo-50 dark:bg-gray-800 px-2 py-1 rounded text-indigo-600 dark:text-gray-300 border border-indigo-100/50 text-[11px] font-extrabold">{{ policy.company }}</span>
+                                                            <span class="text-stripe-blurple font-black text-sm">{{ policy.policyNumber || '未輸入保單號碼' }}</span>
+                                                        </div>
+                                                        <div class="w-6 h-6 flex items-center justify-center rounded-full text-indigo-300 group-hover:bg-indigo-50 dark:group-hover:bg-gray-800 group-hover:text-stripe-blurple transition-colors shrink-0" :class="{'text-stripe-blurple bg-indigo-50 dark:bg-gray-800': expandedPolicies[policy.id]}">
+                                                            <i class="fa-solid fa-chevron-down text-[10px] transition-transform duration-300" :class="{'rotate-180': expandedPolicies[policy.id]}"></i>
+                                                        </div>
+                                                    </div>
+                                                <div class="grid grid-cols-2 gap-y-2 gap-x-3 text-[11px]">
+                                                    <div class="flex items-center gap-1.5"><span class="text-indigo-400 font-bold w-14 shrink-0">被/要保人</span><span class="font-extrabold text-slate-700 dark:text-gray-200 truncate">{{ selectedCustomer.name }} / {{ policy.applicant || '未提供' }}</span></div>
+                                                    <div class="flex items-center gap-1.5"><span class="text-indigo-400 font-bold w-14 shrink-0">投保公司</span><span class="font-extrabold text-slate-700 dark:text-gray-200 truncate">{{ policy.company || '未提供' }}</span></div>
+                                                    <div class="flex items-center gap-1.5"><span class="text-indigo-400 font-bold w-14 shrink-0">繳別</span><span class="font-extrabold text-slate-700 dark:text-gray-200 truncate">{{ policy.paymentFrequency || '未提供' }}</span></div>
+                                                    <div class="flex items-center gap-1.5"><span class="text-indigo-400 font-bold w-14 shrink-0">繳費日</span><span class="font-extrabold text-slate-700 dark:text-gray-200 truncate">{{ policy.paymentDate || '未提供' }}</span></div>
+                                                    <div class="flex items-center gap-1.5"><span class="text-indigo-400 font-bold w-14 shrink-0">應繳保費</span><span class="font-extrabold text-indigo-600 dark:text-indigo-400 truncate">{{ policy.totalPremium ? '$' + policy.totalPremium : '未提供' }}</span></div>
+                                                    <div class="flex items-center gap-1.5"><span class="text-indigo-400 font-bold w-14 shrink-0">保單狀態</span><span class="font-extrabold text-teal-600 dark:text-teal-400 truncate">{{ policy.status || '未提供' }}</span></div>
+                                                    <div class="col-span-2 flex items-start gap-1.5 mt-1"><span class="text-indigo-400 font-bold w-14 shrink-0">保單備註</span><span class="font-medium text-slate-600 dark:text-gray-400 whitespace-pre-line leading-relaxed">{{ policy.notes || '無' }}</span></div>
+                                                </div>
+                                                </div>
+
+                                               <!-- 保單展開內容 -->
+                                                <div v-show="expandedPolicies[policy.id]" class="border-t border-indigo-50 dark:border-gray-800 bg-indigo-50/20 dark:bg-gray-800/30 rounded-b-xl overflow-hidden">
+                                                    
+                                                    <!-- 檢視模式 -->
+                                                    <div v-if="!editingPolicies[policy.id]" class="p-4 space-y-4">
+                                                        <div class="space-y-3">
+                                                            <div class="text-[10px] font-extrabold text-indigo-400 dark:text-gray-500 uppercase tracking-widest border-b border-indigo-100/50 dark:border-gray-700 pb-1 flex items-center gap-1.5">
+                                                                <i class="fa-solid fa-layer-group"></i> 包含商品 ({{ policy.products?.length || 0 }})
+                                                            </div>
+                                                            <div v-for="prod in policy.products" :key="prod.id" class="bg-white/80 dark:bg-gray-800/50 p-3 rounded-xl border border-indigo-50 dark:border-gray-700 shadow-sm hover:border-stripe-blurple/30 transition-colors group/prod relative">
+                                                                <div class="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-1/2 bg-stripe-blurple rounded-r-md opacity-0 group-hover/prod:opacity-100 transition-opacity"></div>
+                                                                <div class="flex justify-between items-start mb-3 pl-1">
+                                                                    <seamless-action-item :item-data="{...prod, company: policy.company}" :display-text="prod.name + (prod.code ? ' (' + prod.code + ')' : '')" text-class="text-[13px] font-extrabold text-slate-800 dark:text-gray-200" @view="openProductModal" @compare="addToCompare" @action-click="openProductModal({...prod, company: policy.company})"></seamless-action-item>
+                                                                    <span v-if="prod.type" class="text-[10px] font-bold text-stripe-blurple bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-md shrink-0 border border-indigo-100/50 dark:border-transparent ml-2">{{ prod.type }}</span>
+                                                                </div>
+                                                                <div class="grid grid-cols-2 gap-y-2 gap-x-2 text-[11px] pl-1">
+                                                                    <div class="flex flex-col"><span class="text-indigo-400 font-bold scale-90 origin-left">保障年期</span><span class="font-extrabold text-slate-700 dark:text-gray-300">{{ prod.term || '-' }}</span></div>
+                                                                    <div class="flex flex-col"><span class="text-indigo-400 font-bold scale-90 origin-left">單位</span><span class="font-extrabold text-slate-700 dark:text-gray-300">{{ prod.unit || '-' }}</span></div>
+                                                                    <div class="flex flex-col"><span class="text-indigo-400 font-bold scale-90 origin-left">保額</span><span class="font-extrabold text-slate-700 dark:text-gray-300">{{ prod.amount || '-' }}</span></div>
+                                                                    <div class="flex flex-col"><span class="text-indigo-400 font-bold scale-90 origin-left">保費</span><span class="font-extrabold text-indigo-600 dark:text-indigo-400">{{ prod.premium ? '$' + prod.premium : '-' }}</span></div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div v-if="policy.notes" class="pt-2 border-t border-indigo-100/50 dark:border-gray-700/50">
+                                                            <span class="text-indigo-400 text-[10px] uppercase font-bold tracking-wider block mb-1">備註</span>
+                                                            <span class="font-medium text-[11px] text-slate-600 dark:text-gray-400 whitespace-pre-line leading-relaxed">{{ policy.notes }}</span>
+                                                        </div>
+                                                        <div class="flex justify-end gap-2 pt-2 border-t border-indigo-100/50 dark:border-gray-700/50 mt-2">
+                                                            <button @click="deletePolicy(policy.id)" class="text-xs bg-rose-50 dark:bg-rose-900/20 border border-rose-100 dark:border-rose-800 text-rose-500 hover:bg-rose-100 dark:hover:bg-rose-900/40 px-4 py-2 rounded-full font-bold shadow-sm transition-colors"><i class="fa-solid fa-trash-can mr-1"></i> 刪除</button>
+                                                            <button @click="startEditPolicy(policy)" class="text-xs bg-white dark:bg-stripe-darkCard border border-indigo-100 dark:border-gray-700 text-indigo-700 dark:text-gray-300 hover:bg-indigo-50 dark:hover:bg-gray-800 px-4 py-2 rounded-full font-bold shadow-sm transition-colors"><i class="fa-solid fa-pen mr-1"></i> 編輯</button>
+                                                        </div>
+                                                    </div>
+
+                                                    
+                                                    <!-- 編輯模式 -->
+                                                    <div v-else class="p-4 space-y-4">
+                                                        <div class="grid grid-cols-2 gap-4">
+                                                            <div><label class="block text-[10px] uppercase font-bold text-indigo-500/80 mb-1.5">保單號碼</label><input v-model="editPolicyData[policy.id].policyNumber" type="text" class="w-full bg-white dark:bg-stripe-darkBg border border-indigo-100 dark:border-gray-700 text-slate-800 dark:text-white rounded-full px-3 py-2 text-xs focus:border-stripe-blurple focus:shadow-stripe-focus outline-none shadow-sm"></div>
+                                                            <div><label class="block text-[10px] uppercase font-bold text-indigo-500/80 mb-1.5">投保日期</label><input v-model="editPolicyData[policy.id].effectiveDate" type="date" class="w-full bg-white dark:bg-stripe-darkBg border border-indigo-100 dark:border-gray-700 text-slate-800 dark:text-white rounded-full px-3 py-2 text-xs focus:border-stripe-blurple focus:shadow-stripe-focus outline-none shadow-sm"></div>
+                                                            <div><label class="block text-[10px] uppercase font-bold text-indigo-500/80 mb-1.5">繳別</label><select v-model="editPolicyData[policy.id].paymentFrequency" class="w-full bg-white dark:bg-stripe-darkBg border border-indigo-100 dark:border-gray-700 text-slate-800 dark:text-white rounded-full px-3 py-2 text-xs focus:border-stripe-blurple focus:shadow-stripe-focus outline-none shadow-sm"><option value="年繳">年繳</option><option value="半年繳">半年繳</option><option value="季繳">季繳</option><option value="月繳">月繳</option><option value="躉繳">躉繳</option></select></div>
+                                                            <div><label class="block text-[10px] uppercase font-bold text-indigo-500/80 mb-1.5">繳費日期</label><input v-model="editPolicyData[policy.id].paymentDate" type="text" placeholder="例: 每月5日" class="w-full bg-white dark:bg-stripe-darkBg border border-indigo-100 dark:border-gray-700 text-slate-800 dark:text-white rounded-full px-3 py-2 text-xs focus:border-stripe-blurple focus:shadow-stripe-focus outline-none shadow-sm"></div>
+                                                            <div class="col-span-2 bg-indigo-50/50 dark:bg-gray-800/50 p-4 rounded-xl border border-indigo-100/50 dark:border-gray-700 mt-2">
+                                                                <label class="block text-xs font-extrabold text-indigo-950 dark:text-gray-300 mb-3">要保人設定</label>
+                                                                <div class="flex bg-white/50 dark:bg-gray-900/50 rounded-full p-1 gap-1 mb-3 border border-indigo-50/50"><button type="button" @click="editPolicyData[policy.id].applicantMode = 'same'; editPolicyData[policy.id].applicant = selectedCustomer.name" class="flex-1 py-1.5 text-[11px] font-bold rounded-full transition-all" :class="editPolicyData[policy.id].applicantMode === 'same' ? 'bg-white dark:bg-stripe-darkCard text-stripe-blurple dark:text-white shadow-sm' : 'text-indigo-500 hover:text-indigo-700 dark:hover:text-gray-300'">同被保人</button><button type="button" @click="editPolicyData[policy.id].applicantMode = 'existing'; editPolicyData[policy.id].applicant = ''" class="flex-1 py-1.5 text-[11px] font-bold rounded-full transition-all" :class="editPolicyData[policy.id].applicantMode === 'existing' ? 'bg-white dark:bg-stripe-darkCard text-stripe-blurple dark:text-white shadow-sm' : 'text-indigo-500 hover:text-indigo-700 dark:hover:text-gray-300'">舊客戶</button><button type="button" @click="editPolicyData[policy.id].applicantMode = 'new'; editPolicyData[policy.id].applicant = ''" class="flex-1 py-1.5 text-[11px] font-bold rounded-full transition-all" :class="editPolicyData[policy.id].applicantMode === 'new' ? 'bg-white dark:bg-stripe-darkCard text-stripe-blurple dark:text-white shadow-sm' : 'text-indigo-500 hover:text-indigo-700 dark:hover:text-gray-300'">新客戶</button></div>
+                                                                <div v-if="editPolicyData[policy.id].applicantMode === 'same'" class="text-xs text-indigo-500/80 dark:text-gray-400">將同步為: <span class="font-bold text-indigo-950 dark:text-white">{{ selectedCustomer.name }}</span></div>
+                                                                <div v-if="editPolicyData[policy.id].applicantMode === 'existing'" class="relative"><searchable-select v-model="editPolicyData[policy.id].applicant" :options="customerOptions" placeholder="選擇已建檔之客戶"></searchable-select></div>
+                                                                <div v-if="editPolicyData[policy.id].applicantMode === 'new'" class="grid grid-cols-2 gap-3 bg-white dark:bg-stripe-darkCard p-3 rounded-xl border border-indigo-100/50 dark:border-gray-700 shadow-sm"><div class="col-span-2"><input type="text" v-model="editPolicyData[policy.id].applicant" placeholder="輸入姓名" class="w-full bg-indigo-50/30 dark:bg-stripe-darkBg border border-indigo-100/80 dark:border-gray-700 text-slate-800 dark:text-white rounded-full px-3 py-2 text-xs focus:border-stripe-blurple focus:shadow-stripe-focus outline-none"></div><div><select v-model="editPolicyData[policy.id].applicantGender" class="w-full bg-indigo-50/30 dark:bg-stripe-darkBg border border-indigo-100/80 dark:border-gray-700 text-slate-800 dark:text-white rounded-full px-3 py-2 text-xs focus:border-stripe-blurple focus:shadow-stripe-focus outline-none"><option value="M">男性</option><option value="F">女性</option></select></div><div><input type="date" v-model="editPolicyData[policy.id].applicantBirthday" class="w-full bg-indigo-50/30 dark:bg-stripe-darkBg border border-indigo-100/80 dark:border-gray-700 text-slate-800 dark:text-white rounded-full px-3 py-2 text-xs focus:border-stripe-blurple focus:shadow-stripe-focus outline-none"></div></div>
+                                                            </div>
+                                                            <div class="col-span-2 mt-1"><label class="block text-[10px] uppercase font-bold text-indigo-500/80 mb-1.5">備註</label><textarea v-model="editPolicyData[policy.id].notes" rows="2" class="w-full bg-white dark:bg-stripe-darkBg border border-indigo-100 dark:border-gray-700 text-slate-800 dark:text-white rounded-lg px-3 py-2 text-xs focus:border-stripe-blurple focus:shadow-stripe-focus outline-none resize-none placeholder-indigo-300 shadow-sm"></textarea></div>
+                                                            
+                                                            <!-- 編輯多項商品 -->
+                                                            <div class="col-span-2 bg-indigo-50/30 dark:bg-gray-800/50 p-3 rounded-xl border border-indigo-100/50 dark:border-gray-700 shadow-sm mt-2">
+                                                                <div class="flex justify-between items-center mb-3 border-b border-indigo-100/50 dark:border-gray-700 pb-2">
+                                                                    <label class="block text-xs font-extrabold text-indigo-950 dark:text-gray-300">包含商品</label>
+                                                                    <button type="button" @click="editPolicyData[policy.id].products.push({id: 'p_'+Date.now(), name: '', term: '', amount: '', premium: ''})" class="text-[10px] text-stripe-blurple font-bold hover:text-indigo-600 bg-white dark:bg-gray-800 px-2 py-1 rounded-full shadow-sm border border-indigo-100 dark:border-gray-700"><i class="fa-solid fa-plus"></i> 新增商品</button>
+                                                                </div>
+                                                                <div class="space-y-2">
+                                                                    <div v-for="(prod, pIdx) in editPolicyData[policy.id].products" :key="pIdx" class="bg-white dark:bg-stripe-darkCard p-3 rounded-lg border border-indigo-50 dark:border-gray-700 shadow-sm relative group mb-2">
+                                                                        <div class="absolute left-0 top-2 bottom-2 w-0.5 bg-indigo-200 dark:bg-gray-600 rounded-r-md"></div>
+                                                                        <div class="flex justify-between items-center mb-2 pl-2">
+                                                                            <label class="text-[10px] font-bold text-indigo-400">商品 {{ pIdx + 1 }}</label>
+                                                                            <button type="button" @click="editPolicyData[policy.id].products.splice(pIdx, 1)" :disabled="editPolicyData[policy.id].products.length === 1" class="text-rose-400 hover:text-rose-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"><i class="fa-solid fa-trash-can text-xs"></i></button>
+                                                                        </div>
+                                                                        <div class="grid grid-cols-2 gap-2 pl-2">
+                                                                            <div class="col-span-2"><searchable-input v-model="prod.name" :options="productList" placeholder="商品名稱 (例:實在醫靠)"></searchable-input></div>
+                                                                            <div class="col-span-1"><input v-model="prod.term" type="text" placeholder="年期 (例:20年期)" class="w-full bg-indigo-50/30 dark:bg-stripe-darkBg border border-indigo-100/80 dark:border-gray-700 text-slate-800 dark:text-white rounded-full px-2 py-1.5 text-xs focus:border-stripe-blurple focus:shadow-stripe-focus outline-none"></div>
+                                                                            <div class="col-span-1"><input v-model="prod.amount" type="text" placeholder="保額 (例:100萬)" class="w-full bg-indigo-50/30 dark:bg-stripe-darkBg border border-indigo-100/80 dark:border-gray-700 text-slate-800 dark:text-white rounded-full px-2 py-1.5 text-xs focus:border-stripe-blurple focus:shadow-stripe-focus outline-none"></div>
+                                                                            <div class="col-span-2"><input v-model="prod.premium" type="text" placeholder="保費 (例:3500)" class="w-full bg-indigo-50/30 dark:bg-stripe-darkBg border border-indigo-100/80 dark:border-gray-700 text-slate-800 dark:text-white rounded-full px-2 py-1.5 text-xs focus:border-stripe-blurple focus:shadow-stripe-focus outline-none"></div>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div class="flex gap-3 pt-4 border-t border-indigo-50 dark:border-gray-700 mt-2">
+                                                            <button @click="cancelEditPolicy(policy.id)" class="flex-1 py-2.5 bg-white dark:bg-stripe-darkCard border border-indigo-100 dark:border-gray-700 text-indigo-700 dark:text-gray-300 text-xs font-bold rounded-full shadow-sm hover:bg-indigo-50 dark:hover:bg-gray-800 transition-colors">取消</button>
+                                                            <button @click="saveEditPolicy(policy.id)" class="flex-1 py-2.5 bg-stripe-blurple text-white text-xs font-bold rounded-full shadow-[0_4px_15px_rgba(99,91,255,0.3)] hover:bg-[#5446E5] transition-colors">儲存</button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- 新增保單 -->
+                                        <transition name="fade">
+                                            <div v-if="showAddPolicyForm" ref="addPolicyFormRef" class="mt-4 p-5 border border-indigo-100/80 dark:border-gray-700 bg-white/90 backdrop-blur dark:bg-gray-800/50 rounded-2xl relative shadow-[0_8px_30px_rgba(99,91,255,0.06)]">
+                                                <h3 class="font-extrabold text-sm text-indigo-950 dark:text-white mb-4">新增保單資料</h3>
+                                                <div class="flex bg-indigo-50/50 dark:bg-gray-900/50 rounded-full p-1 mb-4 border border-indigo-50/50">
+                                                    <button @click="addPolicyMethod = 'manual'" class="flex-1 py-1.5 text-[11px] font-bold rounded-full transition-all" :class="addPolicyMethod === 'manual' ? 'bg-white dark:bg-stripe-darkCard text-stripe-blurple dark:text-white shadow-sm' : 'text-indigo-400 hover:text-indigo-700 dark:hover:text-gray-300'">手動建立</button>
+                                                    <button @click="addPolicyMethod = 'ocr'" class="flex-1 py-1.5 text-[11px] font-bold rounded-full transition-all flex items-center justify-center gap-1.5" :class="addPolicyMethod === 'ocr' ? 'bg-gradient-to-r from-stripe-blurple to-indigo-500 text-white shadow-md' : 'text-indigo-400 hover:text-indigo-700 dark:hover:text-gray-300'"><i class="fa-solid fa-camera"></i> 智能辨識</button>
+                                                </div>
+                                                <input type="file" id="policyFileInput" class="hidden" accept="image/*,application/pdf" @change="handleFileUpload">
+                                                <div v-show="addPolicyMethod === 'ocr'" class="mb-2">
+                                                    <label for="policyFileInput" class="flex flex-col items-center justify-center border-2 border-dashed border-indigo-200 dark:border-gray-600 bg-indigo-50/30 dark:bg-stripe-darkCard rounded-xl p-8 text-center cursor-pointer hover:bg-indigo-50/80 dark:hover:bg-gray-800 transition-colors">
+                                                        <div v-if="!isOcrProcessing" class="flex flex-col items-center"><i class="fa-solid fa-cloud-arrow-up text-2xl text-stripe-blurple mb-2"></i><p class="text-xs font-bold text-indigo-700 dark:text-gray-400">點擊拍照或上傳保單</p></div>
+                                                        <div v-else class="flex flex-col items-center justify-center"><i class="fa-solid fa-circle-notch fa-spin text-2xl text-stripe-blurple mb-2"></i><p class="text-xs font-bold text-indigo-700 dark:text-gray-400">AI 正在辨識...</p></div>
+                                                    </label>
+                                                </div>
+                                                
+                                                <div v-show="addPolicyMethod === 'manual'" class="space-y-4">
+                                                    <div class="grid grid-cols-2 gap-4">
+                                                        <div class="col-span-2"><label class="block text-[10px] uppercase font-bold text-indigo-500/80 mb-1.5">保險公司</label><searchable-input v-model="newPolicyData.company" :options="companyList" placeholder="選擇或輸入 (例：全球人壽)"></searchable-input></div>
+                                                        <div><label class="block text-[10px] uppercase font-bold text-indigo-500/80 mb-1.5">保單號碼</label><input v-model="newPolicyData.policyNumber" type="text" class="w-full bg-white dark:bg-stripe-darkBg border border-indigo-100 dark:border-gray-700 text-slate-800 dark:text-white rounded-full px-3 py-2 text-xs focus:border-stripe-blurple focus:shadow-stripe-focus outline-none shadow-sm"></div>
+                                                        <div><label class="block text-[10px] uppercase font-bold text-indigo-500/80 mb-1.5">投保日期</label><input v-model="newPolicyData.effectiveDate" type="date" class="w-full bg-white dark:bg-stripe-darkBg border border-indigo-100 dark:border-gray-700 text-slate-800 dark:text-white rounded-full px-3 py-2 text-xs focus:border-stripe-blurple focus:shadow-stripe-focus outline-none shadow-sm"></div>
+                                                        <div><label class="block text-[10px] uppercase font-bold text-indigo-500/80 mb-1.5">繳別</label><select v-model="newPolicyData.paymentFrequency" class="w-full bg-white dark:bg-stripe-darkBg border border-indigo-100 dark:border-gray-700 text-slate-800 dark:text-white rounded-full px-3 py-2 text-xs focus:border-stripe-blurple focus:shadow-stripe-focus outline-none shadow-sm"><option value="年繳">年繳</option><option value="半年繳">半年繳</option><option value="季繳">季繳</option><option value="月繳">月繳</option><option value="躉繳">躉繳</option></select></div>
+                                                        <div><label class="block text-[10px] uppercase font-bold text-indigo-500/80 mb-1.5">繳費日期</label><input v-model="newPolicyData.paymentDate" type="text" placeholder="例: 每月5日" class="w-full bg-white dark:bg-stripe-darkBg border border-indigo-100 dark:border-gray-700 text-slate-800 dark:text-white rounded-full px-3 py-2 text-xs focus:border-stripe-blurple focus:shadow-stripe-focus outline-none shadow-sm"></div>
+                                                    </div>
+                                                    
+                                                    <!-- 新增多項商品 -->
+                                                    <div class="bg-indigo-50/30 dark:bg-gray-800/50 p-3 rounded-xl border border-indigo-100/50 dark:border-gray-700 shadow-sm mt-2">
+                                                        <div class="flex justify-between items-center mb-3 border-b border-indigo-100/50 dark:border-gray-700 pb-2">
+                                                            <label class="block text-xs font-extrabold text-indigo-950 dark:text-gray-300">包含商品</label>
+                                                                <button type="button" @click="newPolicyData.products.push({id: 'p_'+Date.now(), name: '', term: '', amount: '', premium: ''})" class="text-[10px] text-stripe-blurple font-bold hover:text-indigo-600 bg-white dark:bg-gray-800 px-2 py-1 rounded-full shadow-sm border border-indigo-100 dark:border-gray-700"><i class="fa-solid fa-plus"></i> 新增商品</button>
+                                                        </div>
+                                                        <div class="space-y-2">
+                                                                <div v-for="(prod, pIdx) in newPolicyData.products" :key="prod.id" class="bg-white dark:bg-stripe-darkCard p-3 rounded-lg border border-indigo-50 dark:border-gray-700 shadow-sm relative group mb-2">
+                                                                    <div class="absolute left-0 top-2 bottom-2 w-0.5 bg-indigo-200 dark:bg-gray-600 rounded-r-md"></div>
+                                                                    <div class="flex justify-between items-center mb-2 pl-2">
+                                                                        <label class="text-[10px] font-bold text-indigo-400">商品 {{ pIdx + 1 }}</label>
+                                                                        <button type="button" @click="newPolicyData.products.splice(pIdx, 1)" :disabled="newPolicyData.products.length === 1" class="text-rose-400 hover:text-rose-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"><i class="fa-solid fa-trash-can text-xs"></i></button>
+                                                                    </div>
+                                                                    <div class="grid grid-cols-2 gap-2 pl-2">
+                                                                        <div class="col-span-2"><searchable-input v-model="prod.name" :options="productList" placeholder="商品名稱 (例:實在醫靠)"></searchable-input></div>
+                                                                        <div class="col-span-1"><input v-model="prod.term" type="text" placeholder="年期 (例:20年期)" class="w-full bg-indigo-50/30 dark:bg-stripe-darkBg border border-indigo-100/80 dark:border-gray-700 text-slate-800 dark:text-white rounded-full px-2 py-1.5 text-xs focus:border-stripe-blurple focus:shadow-stripe-focus outline-none"></div>
+                                                                        <div class="col-span-1"><input v-model="prod.amount" type="text" placeholder="保額 (例:100萬)" class="w-full bg-indigo-50/30 dark:bg-stripe-darkBg border border-indigo-100/80 dark:border-gray-700 text-slate-800 dark:text-white rounded-full px-2 py-1.5 text-xs focus:border-stripe-blurple focus:shadow-stripe-focus outline-none"></div>
+                                                                        <div class="col-span-2"><input v-model="prod.premium" type="text" placeholder="保費 (例:3500)" class="w-full bg-indigo-50/30 dark:bg-stripe-darkBg border border-indigo-100/80 dark:border-gray-700 text-slate-800 dark:text-white rounded-full px-2 py-1.5 text-xs focus:border-stripe-blurple focus:shadow-stripe-focus outline-none"></div>
+                                                                    </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="bg-white dark:bg-stripe-darkCard p-4 rounded-xl border border-indigo-100/50 dark:border-gray-700 shadow-sm mt-2">
+                                                        <label class="block text-xs font-extrabold text-indigo-950 dark:text-gray-300 mb-3">要保人設定</label>
+                                                        <div class="flex bg-indigo-50/50 dark:bg-gray-900/50 rounded-full p-1 gap-1 mb-3 border border-indigo-50/50"><button type="button" @click="newPolicyData.applicantMode = 'same'; newPolicyData.applicant = selectedCustomer.name" class="flex-1 py-1.5 text-[11px] font-bold rounded-full transition-all" :class="newPolicyData.applicantMode === 'same' ? 'bg-white dark:bg-stripe-darkCard text-stripe-blurple dark:text-white shadow-sm' : 'text-indigo-400 hover:text-indigo-700 dark:hover:text-gray-300'">同被保人</button><button type="button" @click="newPolicyData.applicantMode = 'existing'; newPolicyData.applicant = ''" class="flex-1 py-1.5 text-[11px] font-bold rounded-full transition-all" :class="newPolicyData.applicantMode === 'existing' ? 'bg-white dark:bg-stripe-darkCard text-stripe-blurple dark:text-white shadow-sm' : 'text-indigo-400 hover:text-indigo-700 dark:hover:text-gray-300'">舊客戶</button><button type="button" @click="newPolicyData.applicantMode = 'new'; newPolicyData.applicant = ''" class="flex-1 py-1.5 text-[11px] font-bold rounded-full transition-all" :class="newPolicyData.applicantMode === 'new' ? 'bg-white dark:bg-stripe-darkCard text-stripe-blurple dark:text-white shadow-sm' : 'text-indigo-400 hover:text-indigo-700 dark:hover:text-gray-300'">新客戶</button></div>
+                                                        <div v-if="newPolicyData.applicantMode === 'same'" class="text-xs text-indigo-500/80 dark:text-gray-400">同步被保險人：<span class="font-bold text-indigo-950 dark:text-white">{{ selectedCustomer.name }}</span></div>
+                                                        <div v-if="newPolicyData.applicantMode === 'existing'" class="relative"><searchable-select v-model="newPolicyData.applicant" :options="customerOptions" placeholder="選擇已建檔之客戶"></searchable-select></div>
+                                                        <div v-if="newPolicyData.applicantMode === 'new'" class="grid grid-cols-2 gap-2 bg-indigo-50/30 dark:bg-gray-800/50 p-2 rounded-md border border-indigo-100/50 dark:border-gray-700"><div class="col-span-2"><input type="text" v-model="newPolicyData.applicant" placeholder="輸入姓名" class="w-full bg-white dark:bg-stripe-darkBg border border-indigo-100 dark:border-gray-700 rounded-full px-2 py-1.5 text-xs outline-none focus:border-stripe-blurple text-slate-800 dark:text-white shadow-sm"></div><div><select v-model="newPolicyData.applicantGender" class="w-full bg-white dark:bg-stripe-darkBg border border-indigo-100 dark:border-gray-700 rounded-full px-2 py-1.5 text-xs outline-none focus:border-stripe-blurple text-slate-800 dark:text-white shadow-sm"><option value="M">男性</option><option value="F">女性</option></select></div><div><input type="date" v-model="newPolicyData.applicantBirthday" class="w-full bg-white dark:bg-stripe-darkBg border border-indigo-100 dark:border-gray-700 rounded-full px-2 py-1.5 text-xs outline-none focus:border-stripe-blurple text-slate-800 dark:text-white shadow-sm"></div></div>
+                                                    </div>
+                                                    <div><label class="block text-[10px] uppercase font-bold text-indigo-500/80 mb-1.5">備註</label><textarea v-model="newPolicyData.notes" rows="2" class="w-full bg-white dark:bg-stripe-darkBg border border-indigo-100 dark:border-gray-700 text-slate-800 dark:text-white rounded-lg px-3 py-2 text-xs focus:border-stripe-blurple focus:shadow-stripe-focus outline-none resize-none placeholder-indigo-300 shadow-sm"></textarea></div>
+                                                </div>
+                                                <div class="flex gap-3 pt-4 mt-4 border-t border-indigo-100/60 dark:border-gray-700">
+                                                    <button @click="cancelAddPolicy" class="flex-1 py-2.5 bg-white dark:bg-stripe-darkCard border border-indigo-100 dark:border-gray-700 text-indigo-700 dark:text-gray-300 text-xs font-bold rounded-full hover:bg-indigo-50 dark:hover:bg-gray-800 transition-colors shadow-sm">取消</button>
+                                                    <button v-show="addPolicyMethod === 'manual'" @click="savePolicy" class="flex-1 py-2.5 bg-gradient-to-r from-stripe-blurple to-indigo-500 text-white text-xs font-bold rounded-full shadow-[0_4px_15px_rgba(99,91,255,0.3)] hover:from-[#5446E5] hover:to-indigo-600 transition-colors">儲存保單</button>
+                                                </div>
+                                            </div>
+                                        </transition>
+                                    </div>
+                                </div>
+                            </transition>
+                        </div>
+                    </transition>
+                    <!-- ================= Tab 4 & 5: 商品分析 ================= -->
+                    <transition name="fade">
+                        <div v-show="activeTab === 'products'" class="absolute inset-0 flex flex-col h-full bg-gradient-to-b from-indigo-50/30 to-transparent dark:bg-transparent pb-[80px]">
+                            <div class="flex border-b border-indigo-100/60 dark:border-stripe-darkBorder bg-white/70 backdrop-blur-md dark:bg-stripe-dark shrink-0 z-10 overflow-x-auto no-scrollbar">
+                                <button @click="productSubTab = 'compare'" class="flex-1 whitespace-nowrap px-4 py-3 text-sm font-bold transition-all border-b-2 flex items-center justify-center gap-2" :class="productSubTab === 'compare' ? 'border-stripe-blurple text-stripe-blurple bg-indigo-50/50 dark:bg-stripe-darkCard' : 'border-transparent text-indigo-400 dark:text-gray-400 hover:text-indigo-700 dark:hover:text-gray-200'"><i class="fa-solid fa-scale-balanced"></i> 單品與專案比較</button>
+                                <button @click="productSubTab = 'similar'" class="flex-1 whitespace-nowrap px-4 py-3 text-sm font-bold transition-all border-b-2 flex items-center justify-center gap-2" :class="productSubTab === 'similar' ? 'border-stripe-blurple text-stripe-blurple bg-indigo-50/50 dark:bg-stripe-darkCard' : 'border-transparent text-indigo-400 dark:text-gray-400 hover:text-indigo-700 dark:hover:text-gray-200'"><i class="fa-solid fa-layer-group"></i> 相似產品推薦</button>
+                            </div>
+                            
+                            <div v-show="productSubTab === 'compare'" class="flex-1 overflow-y-auto overflow-x-hidden no-scrollbar flex flex-col pt-3">
+                                <div class="px-5 flex justify-between items-center mb-2 shrink-0">
+                                    <h2 class="font-extrabold text-indigo-950 dark:text-white text-lg tracking-tight">多商品深度對比</h2>
+                                    <button @click="showCustomComboManagerModal = true" class="text-[11px] font-bold bg-indigo-50 dark:bg-gray-800 text-stripe-blurple dark:text-gray-300 px-3 py-1.5 rounded-full hover:bg-indigo-100 dark:hover:bg-gray-700 transition-colors shadow-sm"><i class="fa-solid fa-layer-group mr-1"></i> 管理自訂組合</button>
+                                </div>
+                                <div class="mx-5 mb-2 bg-white/90 backdrop-blur dark:bg-stripe-darkCard rounded-2xl shadow-[0_8px_30px_rgba(99,91,255,0.06)] border border-indigo-100/60 dark:border-gray-700 p-4 shrink-0 relative z-20">
+                                    <div class="text-[11px] text-stripe-blurple dark:text-gray-400 font-extrabold flex items-center justify-between gap-1 mb-2 cursor-pointer select-none uppercase tracking-wider" @click="isCompareSlotsExpanded = !isCompareSlotsExpanded"><span class="flex items-center gap-1.5"><i class="fa-solid fa-hand-pointer"></i> 拖曳把手調整順序 (最多 4 項)</span><i class="fa-solid fa-chevron-down transition-transform duration-300" :class="{'rotate-180': !isCompareSlotsExpanded}"></i></div>
+                                    <div v-show="isCompareSlotsExpanded">
+                                        <transition-group name="list" tag="div" class="flex flex-wrap gap-3 items-stretch relative mt-3" ref="slotsContainerRef">
+                                        <div v-for="(slot, idx) in compareSlots" :key="slot.uniqueId" :data-idx="idx" class="flex items-center w-[calc(50%-0.375rem)] shrink-0 bg-white dark:bg-stripe-darkBg border border-indigo-100/80 dark:border-gray-700 rounded-xl overflow-visible transition-all duration-300 min-h-[52px] group slot-item shadow-sm" :class="{'opacity-0 pointer-events-none': draggingIndex === idx, 'hover:border-stripe-blurple/50 dark:hover:border-gray-500 z-10': draggingIndex !== idx}">
+                                                 <div class="h-full w-8 bg-indigo-50/50 dark:bg-gray-800 rounded-l-xl flex items-center justify-center cursor-grab active:cursor-grabbing touch-none prevent-select hover:bg-indigo-100/80 dark:hover:bg-gray-700 transition-colors shrink-0 border-r border-indigo-100/50 dark:border-gray-700" @pointerdown.stop.prevent="onSlotDragStart(idx, $event)"><i class="fa-solid fa-grip-vertical text-indigo-300 dark:text-gray-500 pointer-events-none group-hover:text-stripe-blurple transition-colors"></i></div>
+                                                 <div class="flex-1 min-w-0 px-3 py-2 h-full flex flex-col justify-center cursor-pointer hover:bg-indigo-50/30 dark:hover:bg-gray-800/50 transition-colors" @click.stop.prevent="openProductSelector(idx)">
+                                                     <template v-if="slot.prodId"><span class="text-[9px] text-indigo-400 font-bold leading-tight truncate w-full uppercase tracking-wider">{{ getProduct(slot.prodId)?.company || '保險公司' }}</span><span class="text-[12px] font-extrabold text-slate-800 dark:text-gray-200 leading-tight truncate w-full mt-0.5">{{ getProduct(slot.prodId)?.name || '未知商品' }}</span></template>
+                                                     <template v-else><span class="text-[11px] font-bold text-indigo-400/80 truncate w-full flex items-center gap-1.5"><i class="fa-solid fa-magnifying-glass"></i> 請選擇商品</span></template>
+                                                 </div>
+                                                 <button @click="removeCompareSlot(idx)" class="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-rose-50 dark:bg-rose-900/30 border border-rose-200 dark:border-rose-800/50 text-rose-500 hover:text-rose-700 hover:bg-rose-100 dark:hover:bg-rose-900/50 flex items-center justify-center shrink-0 transition-colors shadow-sm z-20"><i class="fa-solid fa-trash-can text-[10px]"></i></button>
+                                            </div>
+                                            <button key="add-btn" v-if="compareSlots.length < 4" @click.stop.prevent="addCompareSlot" class="shrink-0 border border-dashed border-indigo-300 dark:border-gray-600 rounded-full flex items-center justify-center text-stripe-blurple dark:text-indigo-400 hover:bg-indigo-50/80 dark:hover:bg-indigo-900/20 transition-colors bg-white/50 dark:bg-transparent text-xs font-extrabold gap-1 shadow-sm min-h-[52px]" :class="compareSlots.length === 0 ? 'w-full' : 'w-[calc(50%-0.375rem)]'"><i class="fa-solid fa-plus"></i> 加入</button>
+                                        </transition-group>
+                                    <!-- 幽靈拖曳卡片 (Ghost Element) -->
+                                    <teleport to="body">
+                                        <div v-if="slotDragState.isDragging" class="fixed z-[200] bg-white/95 backdrop-blur dark:bg-stripe-darkBg border-2 border-stripe-blurple rounded-xl shadow-[0_15px_40px_rgba(99,91,255,0.3)] flex items-center overflow-hidden transition-none pointer-events-none scale-105 origin-center" :style="{ left: slotDragState.currentX + 'px', top: slotDragState.currentY + 'px', width: slotDragState.width + 'px', height: slotDragState.height + 'px' }">
+                                            <div class="h-full w-8 bg-stripe-blurple text-white flex items-center justify-center shrink-0"><i class="fa-solid fa-grip-vertical"></i></div>
+                                            <div class="flex-1 min-w-0 px-3 py-2 h-full flex flex-col justify-center">
+                                                <template v-if="slotDragState.item?.prodId">
+                                                    <span class="text-[9px] text-indigo-400 font-bold leading-tight truncate w-full uppercase tracking-wider">{{ getProduct(slotDragState.item.prodId)?.company || '保險公司' }}</span>
+                                                    <span class="text-[12px] font-extrabold text-slate-800 dark:text-gray-200 leading-tight truncate w-full mt-0.5">{{ getProduct(slotDragState.item.prodId)?.name || '未知商品' }}</span>
+                                                </template>
+                                                <template v-else>
+                                                    <span class="text-[11px] font-bold text-indigo-400/80 truncate w-full flex items-center gap-1.5"><i class="fa-solid fa-magnifying-glass"></i> 請選擇商品</span>
+                                                </template>
+                                            </div>
+                                        </div>
+                                    </teleport>
+                                    </div>
+                                </div>
+                                <div class="mx-5 mb-2" v-if="compareSlots.some(s => s.prodId)">
+                                    <button v-if="!isCompareResultVisible" @click="openCompareSettingsModal" class="w-full py-3.5 bg-gradient-to-r from-stripe-blurple to-indigo-500 hover:from-[#5446E5] hover:to-indigo-600 text-white rounded-full font-bold shadow-[0_4px_15px_rgba(99,91,255,0.3)] transition-all flex items-center justify-center gap-2"><i class="fa-solid fa-sliders"></i> 設定條件並進行比較</button>
+                                    <div v-else class="flex flex-col gap-2"><div class="flex justify-between items-center bg-white/90 backdrop-blur dark:bg-stripe-darkCard px-4 py-3 rounded-xl border border-indigo-100/60 dark:border-gray-700 shadow-[0_4px_20px_rgba(99,91,255,0.06)]"><div class="flex items-center gap-4 flex-wrap text-xs text-slate-600 dark:text-gray-300 font-bold"><span class="flex items-center gap-1.5"><i class="fa-solid fa-user text-indigo-400"></i> {{compareGlobalSettings.age}}歲 {{compareGlobalSettings.gender === 'M' ? '男' : '女'}}</span><span class="flex items-center gap-1.5"><i class="fa-solid fa-briefcase text-indigo-400"></i> 職業 {{compareGlobalSettings.jobClass}} 類</span><span class="flex items-center gap-1.5"><i class="fa-solid fa-coins text-indigo-400"></i> {{compareGlobalSettings.paymentFrequency}}</span></div><button @click="openCompareSettingsModal" class="text-stripe-blurple hover:text-[#5446E5] font-extrabold transition-colors shrink-0 ml-2 py-1 px-2.5 bg-indigo-50 dark:bg-indigo-900/30 rounded-full flex items-center gap-1.5 text-xs"><i class="fa-solid fa-pen text-[10px]"></i> 修改</button></div></div>
+                                </div>
+                                <div v-if="isCompareResultVisible" class="w-full overflow-x-auto overflow-y-visible no-scrollbar pb-10 z-10 cursor-grab active:cursor-grabbing prevent-select shrink-0" style="-webkit-overflow-scrolling: touch;" ref="compareTableRef" @mousedown="compDragStart" @mousemove="compDragMove" @mouseup="compDragEnd" @mouseleave="compDragEnd">
+                                    <transition-group name="list" tag="div" class="inline-flex gap-4 items-start px-5 pointer-events-none">
+                                        <div v-for="(slot, idx) in compareSlots" :key="'res_'+slot.uniqueId" class="w-[260px] sm:w-[280px] shrink-0 bg-white/95 backdrop-blur dark:bg-stripe-darkCard border border-indigo-100/80 dark:border-gray-700 rounded-2xl flex flex-col shadow-[0_8px_30px_rgba(99,91,255,0.08)] transition-all duration-300 relative pointer-events-auto overflow-hidden" :class="{'opacity-50 scale-[0.98]': draggingIndex === idx}">
+                                             <div class="p-4 bg-gradient-to-b from-indigo-50/50 to-white dark:from-gray-800/50 dark:to-gray-800/50 border-b border-indigo-50 dark:border-gray-700/50 flex flex-col items-center justify-center text-center relative">
+                                                 <template v-if="slot.prodId">
+                                                     <div class="text-[10px] text-indigo-500/80 dark:text-gray-400 font-extrabold mb-2 flex items-center justify-center gap-1.5 w-full uppercase tracking-widest"><i class="fa-regular fa-building text-indigo-300"></i> {{ getProduct(slot.prodId)?.company }}</div>
+                                                         <seamless-action-item :item-data="getProduct(slot.prodId) || { id: slot.prodId, name: '未知商品', company: '' }" :display-text="getProduct(slot.prodId)?.name || '未知商品'" text-class="text-sm font-extrabold text-indigo-950 dark:text-white hover:text-stripe-blurple transition-colors cursor-pointer flex justify-center text-center w-full line-clamp-2 leading-snug" :show-icon="false" @view="openProductModal" @compare="addToCompare" @action-click="openProductModal(slot.prodId)" @mousedown.stop @touchstart.stop></seamless-action-item>
+                                                     <div class="mt-4 flex flex-col gap-2 w-full pt-3 text-left">
+                                                         <template v-if="getProduct(slot.prodId)?.planType === '專案' || getProduct(slot.prodId)?.planType === '自訂組合'"><div class="flex justify-between items-center text-xs"><span class="text-indigo-400 font-bold">方案類型</span><span class="font-extrabold text-slate-800 dark:text-white">組合方案</span></div><div class="flex justify-between items-center text-xs"><span class="text-indigo-400 font-bold">包含細項</span><span class="font-extrabold text-slate-800 dark:text-white">{{ slot.subItems?.length || 1 }} 項商品</span></div><div class="flex justify-between items-center text-xs pt-1 border-t border-indigo-100/50 dark:border-gray-700/50 mt-1"><span class="text-indigo-950 dark:text-gray-300 font-extrabold">首年保費</span><span class="font-black text-transparent bg-clip-text bg-gradient-to-r from-stripe-blurple to-fuchsia-500 whitespace-pre-line text-right">{{ getSlotTotalPremium(slot) }}</span></div></template>
+                                                         <template v-else><div class="flex justify-between items-center text-xs"><span class="text-indigo-400 font-bold">保額單位</span><span class="font-extrabold text-slate-800 dark:text-white">{{ slot.subItems?.[0]?.amount || '-' }} {{ slot.subItems?.[0]?.unit || '' }}</span></div><div class="flex justify-between items-center text-xs"><span class="text-indigo-400 font-bold">保障年期</span><span class="font-extrabold text-slate-800 dark:text-white">{{ slot.subItems?.[0]?.term || '-' }}</span></div><div class="flex justify-between items-center text-xs pt-1 border-t border-indigo-100/50 dark:border-gray-700/50 mt-1"><span class="text-indigo-950 dark:text-gray-300 font-extrabold">合計保費</span><span class="font-black text-transparent bg-clip-text bg-gradient-to-r from-stripe-blurple to-fuchsia-500 whitespace-pre-line text-right">{{ getSlotTotalPremium(slot) }}</span></div></template>
+                                                     </div>
+                                                 </template>
+                                                 <template v-else><div class="text-indigo-300 text-xs font-bold py-12">此欄位目前為空</div></template>
+                                             </div>
+                                             <div class="p-4 flex flex-col gap-4 flex-1 bg-white/50 dark:bg-stripe-darkCard">
+                                                 <template v-if="slot.prodId">
+                                                     <div v-for="cat in compareCategories" :key="cat.title" class=""><div class="text-[10px] font-extrabold text-indigo-400 dark:text-gray-500 mb-2 flex items-center gap-1.5 uppercase tracking-widest"><i :class="cat.icon" class="opacity-80"></i> {{ cat.title }}</div><div class="flex flex-col border border-indigo-50 dark:border-gray-700/80 rounded-xl overflow-hidden"><div v-for="(label, key) in cat.keys" :key="key" class="flex justify-between items-center py-2.5 px-3 border-b border-indigo-50 dark:border-gray-700/80 last:border-0 bg-white/80 dark:bg-stripe-darkCard hover:bg-indigo-50/50 dark:hover:bg-gray-800/50 transition-colors"><span class="text-[11px] text-slate-500 dark:text-gray-400 font-bold w-1/3 leading-tight pr-2">{{ label }}</span><span class="text-[12px] text-slate-800 dark:text-gray-100 font-extrabold w-2/3 text-right whitespace-pre-line" v-html="highlightDiff(getProduct(slot.prodId)?.[key] || '-')"></span></div></div></div>
+                                                 </template>
+                                                 <template v-else><div class="flex-1 flex flex-col items-center justify-center text-indigo-300 dark:text-gray-600 pt-10 pb-10"><i class="fa-solid fa-inbox text-3xl mb-3"></i><span class="text-xs font-bold">從上方選擇商品加入對比</span></div></template>
+                                             </div>
+                                        </div>
+                                    </transition-group>
+                                </div>
+                            </div>
+                            
+                            <!-- 相似商品推薦 -->
+                            <div v-show="productSubTab === 'similar'" class="flex-1 overflow-y-auto no-scrollbar p-5">
+                                <div class="mb-6 space-y-4">
+                                        <div class="flex justify-between items-center cursor-pointer prevent-select" @click="isSimilarFiltersExpanded = !isSimilarFiltersExpanded">
+                                            <label class="block text-xs font-extrabold text-indigo-950 dark:text-white uppercase tracking-wider cursor-pointer">尋找相似商品</label>
+                                            <button class="text-indigo-400 hover:text-stripe-blurple transition-colors"><i class="fa-solid fa-chevron-down text-xs transition-transform duration-300" :class="{'rotate-180': !isSimilarFiltersExpanded}"></i></button>
+                                        </div>
+                                        <div v-show="isSimilarFiltersExpanded" class="bg-white/90 backdrop-blur dark:bg-stripe-darkCard border border-indigo-100/60 dark:border-gray-700 rounded-xl p-4 shadow-[0_8px_30px_rgba(99,91,255,0.06)] space-y-3">
+                                        <div class="flex items-center gap-3"><div class="w-8 h-8 bg-indigo-50 dark:bg-gray-800 text-stripe-blurple rounded-full flex items-center justify-center shrink-0 border border-indigo-100/50 dark:border-gray-700"><i class="fa-regular fa-building text-xs"></i></div><searchable-select v-model="selectedCompany" :options="companyOptions" @change="onCompanyChange" placeholder="選擇保險公司"></searchable-select></div>
+                                        <div class="flex items-center gap-3"><div class="w-8 h-8 bg-indigo-50 dark:bg-gray-800 text-stripe-blurple rounded-full flex items-center justify-center shrink-0 border border-indigo-100/50 dark:border-gray-700"><i class="fa-solid fa-shield-halved text-xs"></i></div><searchable-select v-model="similarTarget" :options="filteredProductOptions" placeholder="選擇目標商品" :disabled="!filteredProductOptions?.length"></searchable-select></div>
+                                    </div>
+                                </div>
+                                <h3 class="font-extrabold text-indigo-950 dark:text-white text-sm mb-4 flex items-center gap-2"><i class="fa-solid fa-wand-magic-sparkles text-stripe-blurple"></i> AI 推薦替代方案</h3>
+                                <div v-if="similarTarget && getSimilarProducts(similarTarget).length > 0" class="space-y-3">
+                                    <div v-for="sim in getSimilarProducts(similarTarget)" :key="sim.id" class="bg-white/95 backdrop-blur dark:bg-stripe-darkCard rounded-2xl p-5 border border-indigo-100/60 dark:border-gray-700 shadow-sm relative overflow-hidden group hover:border-stripe-blurple transition-colors">
+                                        <div class="absolute top-0 right-0 bg-gradient-to-r from-stripe-blurple to-fuchsia-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl shadow-sm">相似度 {{ sim.match }}%</div>
+                                        <div class="mb-3 pr-16 relative z-10"><seamless-action-item :item-data="{ id: sim.id, name: sim.name, company: selectedCompany }" :display-text="sim.name" text-class="font-extrabold text-indigo-950 dark:text-white text-sm cursor-pointer group-hover:text-stripe-blurple transition-colors" :show-icon="false" @view="openProductModal" @compare="addToCompare" @action-click="openProductModal(sim.id)"></seamless-action-item></div>
+                                        <div class="bg-indigo-50/50 dark:bg-gray-800/80 rounded-xl p-3 text-xs border border-indigo-100/50 dark:border-gray-700"><span class="font-bold text-slate-800 dark:text-gray-300 block mb-1">💡 推薦理由</span><span class="text-slate-600 dark:text-gray-400 leading-relaxed">{{ sim.reason }}</span></div>
+                                    </div>
+                                </div>
+                                <div v-else class="text-center py-10 text-indigo-300 dark:text-gray-500 text-sm font-bold border-2 border-dashed border-indigo-200 dark:border-gray-700 rounded-2xl mx-2 bg-white/50 backdrop-blur">目前此商品尚未建立相似推薦資料庫</div>
+                            </div>
+                        </div>
+                    </transition>
+                    <!-- ================= Tab 6: 時事話術 ================= -->
+                    <transition name="fade">
+                        <div v-show="activeTab === 'pitch'" class="absolute inset-0 flex flex-col h-full bg-gradient-to-b from-indigo-50/30 to-transparent dark:bg-transparent pb-[80px]">
+                            <div class="p-5 bg-white/70 backdrop-blur-md dark:bg-stripe-dark border-b border-indigo-100/60 dark:border-stripe-darkBorder shadow-sm z-10 shrink-0">
+                                <h2 class="font-extrabold text-indigo-950 dark:text-white text-lg mb-4 flex items-center gap-2 tracking-tight">話題行銷助手</h2>
+                                <div class="flex overflow-x-auto no-scrollbar gap-2 pb-2 cursor-grab active:cursor-grabbing prevent-select" ref="topicTableRef" @mousedown="topicDragStart" @mousemove="topicDragMove" @mouseup="topicDragEnd" @mouseleave="topicDragEnd">
+                                    <button v-for="topic in trendingTopics" :key="topic.id" @click="selectedTopic = topic" class="whitespace-nowrap px-4 py-2 rounded-full border text-xs font-bold transition-all shrink-0 pointer-events-auto shadow-sm" :class="selectedTopic?.id === topic.id ? 'bg-gradient-to-r from-stripe-blurple to-indigo-500 border-transparent text-white shadow-[0_4px_15px_rgba(99,91,255,0.3)]' : 'bg-white dark:bg-stripe-darkCard border-indigo-100 dark:border-gray-700 text-slate-600 dark:text-gray-300 hover:bg-indigo-50 dark:hover:bg-gray-800'"><span class="mr-1.5">{{ topic.emoji }}</span> {{ topic.title }}</button>
+                                </div>
+                                <div class="mt-4 flex gap-2 items-center">
+                                    <div class="flex-1 relative"><i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3 text-indigo-400 text-xs"></i><input type="text" v-model="customTopic" placeholder="輸入客群或時事 (例: 科技業單身族)" class="w-full bg-white dark:bg-stripe-darkBg border border-indigo-100 dark:border-gray-700 rounded-full pl-9 pr-3 py-2 text-xs text-slate-800 dark:text-white focus:outline-none focus:border-stripe-blurple focus:shadow-stripe-focus transition-all shadow-sm"></div>
+                                    <button @click="generatePitch" :disabled="isGeneratingPitch || !customTopic?.trim()" class="shrink-0 px-4 py-2 bg-stripe-blurple hover:bg-[#5446E5] text-white text-xs font-bold rounded-full shadow-stripe disabled:opacity-50 transition-all whitespace-nowrap"><span v-if="isGeneratingPitch"><i class="fa-solid fa-circle-notch fa-spin"></i></span><span v-else>生成專屬話術</span></button>
+                                </div>
+                            </div>
+                            <div class="flex-1 overflow-y-auto no-scrollbar p-5" v-if="selectedTopic">
+                                <div class="bg-gradient-to-br from-indigo-950 to-purple-900 dark:bg-stripe-darkCard border border-indigo-900 dark:border-gray-700 rounded-2xl p-5 text-white mb-6 shadow-[0_10px_30px_rgba(10,37,64,0.15)] relative overflow-hidden"><i class="fa-solid fa-quote-right absolute -right-2 -bottom-4 text-7xl opacity-10 text-indigo-300"></i><span class="text-[10px] font-extrabold px-2 py-1 rounded bg-white/20 text-indigo-50 mb-3 inline-block uppercase tracking-wider">背景情境</span><h3 class="font-black text-lg mb-2 leading-tight text-white">{{ selectedTopic.title }}</h3><p class="text-sm text-indigo-100 leading-relaxed font-medium">{{ selectedTopic.context }}</p></div>
+                                <h3 class="font-extrabold text-indigo-950 dark:text-white text-sm mb-4 flex items-center gap-2"><i class="fa-solid fa-bullseye text-stripe-blurple"></i> 分眾切入建議</h3>
+                                <div class="space-y-4">
+                                    <div v-for="(pitch, idx) in selectedTopic.pitches" :key="idx" class="bg-white/95 backdrop-blur dark:bg-stripe-darkCard border border-indigo-100/60 dark:border-gray-700 rounded-2xl overflow-hidden shadow-sm group hover:border-stripe-blurple/50 dark:hover:border-gray-500 transition-colors">
+                                        <div class="bg-indigo-50/50 dark:bg-gray-800/80 px-4 py-2.5 border-b border-indigo-50 dark:border-gray-700 flex justify-between items-center"><span class="text-xs font-extrabold text-indigo-950 dark:text-gray-300 flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full bg-stripe-blurple"></div> {{ pitch.target }}</span></div>
+                                        <div class="p-5"><p class="text-sm text-slate-700 dark:text-gray-400 leading-relaxed mb-5 font-bold">「{{ pitch.text }}」</p><button @click="copyToClipboard(pitch.text)" class="w-full py-2.5 bg-white dark:bg-stripe-darkBg text-stripe-blurple dark:text-gray-300 rounded-full text-xs font-extrabold border border-indigo-100 dark:border-gray-700 hover:border-stripe-blurple hover:bg-indigo-50 dark:hover:border-stripe-blurple dark:hover:text-stripe-blurple transition-all flex items-center justify-center gap-2 shadow-sm"><i class="fa-regular fa-copy"></i> 複製話術</button></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </transition>
+                </div>
+                <!-- ================= Modal: 條件設定與產生比較 ================= -->
+                <transition name="slide-up">
+                    <div v-if="showCompareSettingsModal" class="absolute inset-0 z-[75] bg-slate-50 dark:bg-stripe-darkBg flex flex-col h-[100dvh] shadow-2xl transition-colors duration-300">
+                        <header class="bg-white/90 backdrop-blur dark:bg-stripe-dark border-b border-indigo-100/50 dark:border-stripe-darkBorder p-4 flex items-center justify-between shrink-0 shadow-sm z-10 transition-colors"><h2 class="text-base font-extrabold text-indigo-950 dark:text-white flex items-center gap-2 tracking-tight">設定比較參數</h2><button @click="showCompareSettingsModal = false" class="w-8 h-8 rounded-full bg-indigo-50 dark:bg-gray-800 hover:bg-indigo-100 dark:hover:bg-gray-700 text-stripe-blurple dark:text-gray-400 flex items-center justify-center shrink-0 transition-colors shadow-sm"><i class="fa-solid fa-xmark"></i></button></header>
+                        <div class="flex-1 overflow-y-auto no-scrollbar p-5 pb-24">
+                            <div class="bg-white/95 backdrop-blur dark:bg-stripe-darkCard border border-indigo-100/60 dark:border-gray-700 rounded-2xl shadow-[0_8px_30px_rgba(99,91,255,0.06)] mb-6 transition-colors overflow-hidden">
+                                <div class="px-5 py-4 flex justify-between items-center cursor-pointer border-b border-transparent transition-colors prevent-select" :class="{'border-indigo-100/60 dark:border-gray-700': isGlobalSettingsExpanded}" @click="isGlobalSettingsExpanded = !isGlobalSettingsExpanded">
+                                    <h3 class="text-[10px] font-extrabold text-indigo-400 dark:text-gray-500 uppercase tracking-widest flex items-center gap-2 m-0"><i class="fa-solid fa-user"></i> 全域條件設定</h3>
+                                    <button class="text-indigo-400 hover:text-stripe-blurple transition-colors"><i class="fa-solid fa-chevron-down text-xs transition-transform duration-300" :class="{'rotate-180': !isGlobalSettingsExpanded}"></i></button>
+                                </div>
+                                <div v-show="isGlobalSettingsExpanded" class="px-5 pb-5 pt-1">
+                                    <div class="grid grid-cols-2 gap-4"><div><label class="block text-[10px] font-bold text-slate-500 dark:text-gray-400 mb-1.5 uppercase">投保年齡</label><input type="number" v-model="compareGlobalSettings.age" class="w-full bg-white dark:bg-stripe-darkBg border border-indigo-100 dark:border-gray-700 rounded-xl px-3 py-2 text-sm text-slate-800 dark:text-white outline-none focus:border-stripe-blurple focus:shadow-stripe-focus transition-all shadow-sm"></div><div><label class="block text-[10px] font-bold text-slate-500 dark:text-gray-400 mb-1.5 uppercase">性別</label><select v-model="compareGlobalSettings.gender" class="w-full bg-white dark:bg-stripe-darkBg border border-indigo-100 dark:border-gray-700 rounded-xl px-3 py-2 text-sm text-slate-800 dark:text-white outline-none focus:border-stripe-blurple focus:shadow-stripe-focus transition-all shadow-sm"><option value="M">男性</option><option value="F">女性</option></select></div><div><label class="block text-[10px] font-bold text-slate-500 dark:text-gray-400 mb-1.5 uppercase">職業等級</label><select v-model="compareGlobalSettings.jobClass" class="w-full bg-white dark:bg-stripe-darkBg border border-indigo-100 dark:border-gray-700 rounded-xl px-3 py-2 text-sm text-slate-800 dark:text-white outline-none focus:border-stripe-blurple focus:shadow-stripe-focus transition-all shadow-sm"><option value="1">第 1 類 (內勤)</option><option value="2">第 2 類 (外勤)</option><option value="3">第 3 類 (工程)</option><option value="4">第 4 類 (高風險)</option></select></div><div><label class="block text-[10px] font-bold text-slate-500 dark:text-gray-400 mb-1.5 uppercase">繳別</label><select v-model="compareGlobalSettings.paymentFrequency" class="w-full bg-white dark:bg-stripe-darkBg border border-indigo-100 dark:border-gray-700 rounded-xl px-3 py-2 text-sm text-slate-800 dark:text-white outline-none focus:border-stripe-blurple focus:shadow-stripe-focus transition-all shadow-sm"><option value="年繳">年繳</option><option value="半年繳">半年繳</option><option value="季繳">季繳</option><option value="月繳">月繳</option></select></div></div>
+                                </div>
+                            </div>
+                            <h3 class="text-[10px] font-extrabold text-indigo-400 dark:text-gray-500 mb-3 ml-1 uppercase tracking-widest flex items-center gap-2"><i class="fa-solid fa-cube"></i> 各商品細項微調</h3>
+                            <div class="space-y-4">
+                                <template v-for="slot in compareSlots" :key="'set_'+slot.uniqueId"><div v-if="slot.prodId" class="bg-white/95 backdrop-blur dark:bg-stripe-darkCard border border-indigo-100/60 dark:border-gray-700 rounded-2xl overflow-hidden shadow-[0_8px_30px_rgba(99,91,255,0.06)] transition-colors"><div class="bg-indigo-50/50 dark:bg-gray-800/80 border-b border-indigo-50 dark:border-gray-700 px-4 py-3 flex items-center gap-3"><div class="w-8 h-8 rounded-full bg-white dark:bg-stripe-darkBg border border-indigo-100/50 dark:border-gray-700 text-stripe-blurple flex items-center justify-center shrink-0 shadow-sm"><i class="fa-regular fa-building text-xs"></i></div><div class="flex-1 min-w-0"><div class="text-[9px] text-indigo-400 font-bold leading-none mb-1 uppercase tracking-widest">{{ getProduct(slot.prodId)?.company }}</div><div class="text-sm font-black text-indigo-950 dark:text-white truncate leading-tight">{{ getProduct(slot.prodId)?.name }}</div></div></div><div class="hidden sm:grid grid-cols-12 gap-2 px-4 py-2 bg-white dark:bg-stripe-darkCard text-[10px] font-extrabold text-slate-500 dark:text-gray-500 border-b border-indigo-50 dark:border-gray-700 uppercase tracking-widest"><div class="col-span-1 text-center">約別</div><div class="col-span-2 text-center">代碼</div><div class="col-span-2">商品名稱</div><div class="col-span-2 text-center">保額</div><div class="col-span-1 text-center">單位</div><div class="col-span-1 text-center">保障年期</div><div class="col-span-1 text-right">首年保費</div><div class="col-span-2 text-right pr-2">總保費</div></div><div v-for="(subItem, sIdx) in slot.subItems" :key="sIdx" class="p-4 sm:p-3 grid grid-cols-2 sm:grid-cols-12 gap-4 sm:gap-2 items-center border-t border-indigo-50 dark:border-gray-700/50 sm:border-0 sm:border-b last:border-0 relative bg-white dark:bg-stripe-darkCard"><button v-if="slot.subItems.length > 1 && (getProduct(slot.prodId)?.planType === '專案' || getProduct(slot.prodId)?.planType === '自訂組合')" @click="slot.subItems.splice(sIdx, 1)" class="absolute right-3 top-3 sm:top-1/2 sm:-translate-y-1/2 sm:right-2 w-6 h-6 flex items-center justify-center text-rose-400 hover:text-rose-600 bg-rose-50 dark:bg-rose-900/30 hover:bg-rose-100 dark:hover:bg-rose-900/50 rounded-full transition-colors z-10" title="刪除此商品"><i class="fa-solid fa-trash-can text-[10px]"></i></button><div class="col-span-2 sm:col-span-12 mb-2 sm:hidden border-b border-indigo-50 dark:border-gray-700/50 pb-2 pr-8"><span class="text-sm font-bold text-slate-800 dark:text-white">{{ subItem.name }}</span></div><div class="col-span-1 sm:col-span-1 flex flex-col justify-center"><span class="sm:hidden text-[10px] font-bold text-indigo-400 mb-1 uppercase tracking-wider">約別</span><div class="text-[11px] text-slate-600 dark:text-gray-400 font-bold select-none text-center truncate">{{ subItem.type }}</div></div><div class="col-span-1 sm:col-span-2 flex flex-col justify-center"><span class="sm:hidden text-[10px] font-bold text-indigo-400 mb-1 uppercase tracking-wider">商品代碼</span><div class="text-[11px] text-slate-600 dark:text-gray-400 font-bold select-none truncate text-center uppercase">{{ subItem.code }}</div></div><div class="hidden sm:flex col-span-2 flex-col justify-center"><div class="text-[11px] text-slate-800 dark:text-gray-300 font-bold truncate select-none pr-2" :title="subItem.name">{{ subItem.name }}</div></div><div class="col-span-1 sm:col-span-2 flex flex-col justify-center"><span class="sm:hidden text-[10px] font-bold text-indigo-400 mb-1 uppercase tracking-wider">保額</span><input type="text" v-model="subItem.amount" class="text-xs font-bold text-slate-800 dark:text-white bg-white dark:bg-stripe-darkBg border border-indigo-100 dark:border-gray-700 rounded-full px-2 py-1.5 outline-none focus:border-stripe-blurple focus:shadow-stripe-focus w-full transition-all text-center shadow-sm"></div><div class="col-span-1 sm:col-span-1 flex flex-col justify-center"><span class="sm:hidden text-[10px] font-bold text-indigo-400 mb-1 uppercase tracking-wider">單位</span><div class="text-[11px] text-slate-600 dark:text-gray-400 font-bold select-none truncate text-center">{{ subItem.unit }}</div></div><div class="col-span-1 sm:col-span-1 flex flex-col justify-center"><span class="sm:hidden text-[10px] font-bold text-indigo-400 mb-1 uppercase tracking-wider">保障年期</span><select v-model="subItem.term" class="text-xs font-bold text-slate-800 dark:text-white bg-white dark:bg-stripe-darkBg border border-indigo-100 dark:border-gray-700 rounded-full px-1 py-1.5 outline-none focus:border-stripe-blurple focus:shadow-stripe-focus w-full transition-all text-center shadow-sm"><option value="1年期">1年</option><option value="2年期">2年</option><option value="10年期">10年</option><option value="20年期">20年</option><option value="至80歲">至80</option><option value="終身">終身</option></select></div><div class="col-span-1 sm:col-span-1 flex flex-col justify-center"><span class="sm:hidden text-[10px] font-bold text-indigo-400 mb-1 uppercase tracking-wider">首年保費</span><input type="text" :value="compareGlobalSettings.gender === 'M' ? subItem.premiumM : subItem.premiumF" @input="compareGlobalSettings.gender === 'M' ? (subItem.premiumM = $event.target.value) : (subItem.premiumF = $event.target.value)" class="text-xs text-slate-800 dark:text-white font-black bg-white dark:bg-stripe-darkBg border border-indigo-100 dark:border-gray-700 rounded-full px-2 py-1.5 outline-none focus:border-stripe-blurple focus:shadow-stripe-focus w-full transition-all text-right shadow-sm"></div><div class="col-span-2 sm:col-span-2 flex flex-col sm:justify-center"><span class="sm:hidden text-[10px] font-bold text-indigo-400 mb-1 uppercase tracking-wider">預估總保費</span><div class="text-[12px] font-black text-indigo-950 dark:text-gray-400 text-right select-none truncate sm:pr-10 pt-1 sm:pt-0">{{ calculateItemTotalPremium(subItem).toLocaleString() }}</div></div></div><div class="bg-indigo-50/30 dark:bg-gray-800/50 p-4 border-t border-indigo-50 dark:border-gray-700 flex justify-between items-center rounded-b-2xl"><span class="text-[11px] font-extrabold text-indigo-500 dark:text-gray-400 uppercase tracking-widest">{{ (getProduct(slot.prodId)?.planType === '專案' || getProduct(slot.prodId)?.planType === '自訂組合') ? '組合合計' : '單品合計' }}</span><div class="flex gap-5 text-xs"><span class="text-indigo-400 dark:text-gray-400 font-bold">首年: <span class="font-black text-indigo-950 dark:text-white">{{ getSlotTotalPremium(slot) }}</span></span><span class="text-indigo-400 dark:text-gray-400 font-bold">總繳: <span class="font-black text-stripe-blurple dark:text-white">{{ getSlotTotalOverallPremium(slot) }}</span></span></div></div></div></template>
+                            </div>
+                        </div>
+                        <div class="absolute bottom-0 left-0 right-0 p-5 bg-white/90 backdrop-blur dark:bg-stripe-dark border-t border-indigo-100/50 dark:border-stripe-darkBorder pb-safe transition-colors z-20"><button @click="confirmCompareSettings" class="w-full py-3.5 bg-gradient-to-r from-stripe-blurple to-indigo-600 hover:from-[#5446E5] hover:to-indigo-700 text-white rounded-full font-bold shadow-[0_4px_15px_rgba(99,91,255,0.3)] transition-opacity flex items-center justify-center gap-2">確認設定並查看結果</button></div>
+                    </div>
+                </transition>
+                <!-- ================= Modal: 全螢幕商品詳細資訊 ================= -->
+                <transition name="slide-up">
+                    <div v-if="selectedProductDetail" class="absolute inset-0 z-[50] bg-white/95 backdrop-blur-xl dark:bg-stripe-darkBg flex flex-col h-[100dvh] shadow-2xl transition-colors duration-300">
+                        <header class="bg-transparent border-b border-indigo-50 dark:border-gray-800 p-4 flex items-center justify-between shrink-0">
+                            <div class="flex-1 min-w-0 pr-4"><div class="text-[10px] text-indigo-400 font-extrabold mb-1 tracking-widest uppercase"><i class="fa-regular fa-building"></i> {{ selectedProductDetail.company }}</div><h2 class="text-lg font-black text-indigo-950 dark:text-white truncate tracking-tight">{{ selectedProductDetail.name }}</h2></div>
+                            <button @click="closeProductModal" class="w-8 h-8 rounded-full bg-indigo-50 dark:bg-gray-800 hover:bg-indigo-100 dark:hover:bg-gray-700 text-stripe-blurple dark:text-gray-400 flex items-center justify-center shrink-0 transition-colors shadow-sm"><i class="fa-solid fa-xmark"></i></button>
+                        </header>
+                        <div class="flex-1 overflow-y-auto no-scrollbar p-5 pb-24 bg-gradient-to-b from-indigo-50/30 to-transparent dark:bg-transparent">
+                            <div class="flex flex-wrap gap-2 mb-6" v-if="selectedProductDetail.tags && selectedProductDetail.tags.length > 0">
+                                <span v-for="(tag, idx) in selectedProductDetail.tags" :key="idx" class="bg-white dark:bg-indigo-900/30 text-stripe-blurple dark:text-indigo-400 px-3 py-1 rounded-full text-[10px] font-bold tracking-wide border border-indigo-100 shadow-sm">{{ tag }}</span>
+                            </div>
+                            <div class="bg-white/90 dark:bg-stripe-darkCard border border-indigo-50 dark:border-gray-700 rounded-2xl p-5 mb-6 relative overflow-hidden shadow-sm" v-if="selectedProductDetail.features && selectedProductDetail.features.length > 0">
+                                <h3 class="font-extrabold text-indigo-950 dark:text-white text-sm mb-4 flex items-center gap-2 relative z-10"><i class="fa-solid fa-lightbulb text-amber-500"></i> 核心優勢</h3>
+                                <ul class="space-y-3 relative z-10"><li v-for="(feature, idx) in selectedProductDetail.features" :key="idx" class="text-sm text-slate-700 dark:text-gray-300 flex items-start gap-3 font-bold"><i class="fa-solid fa-check text-white mt-1 text-[10px] bg-gradient-to-r from-teal-400 to-emerald-500 w-4 h-4 rounded-full flex items-center justify-center shrink-0 shadow-sm"></i><span class="leading-snug">{{ feature }}</span></li></ul>
+                            </div>
+                            <div class="bg-white/90 dark:bg-stripe-darkCard border border-indigo-50 dark:border-gray-700 rounded-2xl p-5 mb-6 relative overflow-hidden shadow-sm" v-if="selectedProductDetail.aiHighlights && selectedProductDetail.aiHighlights.length > 0">
+                                <h3 class="font-extrabold text-indigo-950 dark:text-white text-sm mb-4 flex items-center gap-2 relative z-10"><i class="fa-solid fa-wand-magic-sparkles text-stripe-blurple"></i> AI 推薦亮點</h3>
+                                <div class="space-y-4 relative z-10">
+                                    <div v-for="(hl, idx) in selectedProductDetail.aiHighlights" :key="idx">
+                                        <h4 class="text-xs font-extrabold text-indigo-700 dark:text-indigo-400 mb-1 flex items-center gap-1.5"><i class="fa-solid fa-star text-[10px] text-amber-400"></i> {{ hl.title }}</h4>
+                                        <p class="text-xs text-slate-600 dark:text-gray-400 leading-relaxed font-bold pl-4">{{ hl.desc }}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="bg-white/90 dark:bg-stripe-darkCard border border-indigo-50 dark:border-gray-700 rounded-2xl p-5 mb-6 relative overflow-hidden shadow-sm" v-if="selectedProductDetail.contentSummary && selectedProductDetail.contentSummary.length > 0">
+                                <h3 class="font-extrabold text-indigo-950 dark:text-white text-sm mb-4 flex items-center gap-2 relative z-10"><i class="fa-solid fa-list-check text-teal-500"></i> 內容摘要</h3>
+                                <div class="space-y-4 relative z-10">
+                                    <div v-for="(sum, idx) in selectedProductDetail.contentSummary" :key="idx" class="bg-indigo-50/50 dark:bg-gray-800/50 rounded-xl p-3 border border-indigo-100/50 dark:border-gray-700">
+                                        <h4 class="text-xs font-extrabold text-slate-800 dark:text-gray-200 mb-2 border-b border-indigo-100/80 dark:border-gray-700 pb-1.5">{{ sum.title }}</h4>
+                                        <ul class="space-y-1.5">
+                                            <li v-for="(pt, pIdx) in sum.points" :key="pIdx" class="text-[11px] text-slate-600 dark:text-gray-400 leading-relaxed font-bold flex items-start gap-1.5"><i class="fa-solid fa-check text-teal-500 mt-0.5 text-[9px] shrink-0"></i> <span>{{ pt }}</span></li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="bg-white/90 dark:bg-stripe-darkCard border border-indigo-50 dark:border-gray-700 rounded-2xl p-5 mb-6 relative overflow-hidden shadow-sm" v-if="selectedProductDetail.targetAudience && selectedProductDetail.targetAudience.length > 0">
+                                <h3 class="font-extrabold text-indigo-950 dark:text-white text-sm mb-4 flex items-center gap-2 relative z-10"><i class="fa-solid fa-users-viewfinder text-rose-500"></i> 適合對象</h3>
+                                <div class="flex flex-wrap gap-2 relative z-10">
+                                    <span v-for="(aud, idx) in selectedProductDetail.targetAudience" :key="idx" class="bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 px-3 py-1.5 rounded-lg text-xs font-bold border border-rose-100/50 dark:border-rose-800/50 shadow-sm flex items-center gap-1.5"><i class="fa-solid fa-user-check text-[10px]"></i> {{ aud }}</span>
+                                </div>
+                            </div>
+                            <div class="flex justify-center gap-3">
+                                <button @click="showRulesModal = true" class="w-40 py-2.5 bg-white dark:bg-stripe-darkCard text-stripe-blurple dark:text-gray-300 font-extrabold rounded-full border border-indigo-100 dark:border-gray-700 hover:bg-indigo-50 dark:hover:bg-gray-800 transition-colors flex items-center justify-center gap-2 shadow-sm">投保規則</button>
+                                <button @click="showTermsModal = true" class="w-40 py-2.5 bg-gradient-to-r from-stripe-blurple to-indigo-600 dark:bg-white text-white dark:text-gray-900 font-extrabold rounded-full shadow-[0_4px_15px_rgba(99,91,255,0.3)] hover:opacity-90 transition-opacity flex items-center justify-center gap-2">保單條款</button>
+                            </div>
+                        </div>
+                    </div>
+                </transition>
+                <transition name="slide-up">
+                    <div v-if="showRulesModal && selectedProductDetail" class="absolute inset-0 z-[60] bg-white/95 backdrop-blur dark:bg-stripe-darkBg flex flex-col h-[100dvh] shadow-2xl transition-colors duration-300">
+                        <header class="bg-white dark:bg-stripe-dark border-b border-indigo-50 dark:border-stripe-darkBorder p-4 flex items-center justify-between shrink-0 shadow-sm z-10 transition-colors"><h2 class="text-base font-extrabold text-indigo-950 dark:text-white flex items-center gap-2 truncate pr-4 tracking-tight">投保規則 - {{ selectedProductDetail.shortName || selectedProductDetail.name }}</h2><button @click="showRulesModal = false" class="w-8 h-8 rounded-full bg-indigo-50 dark:bg-gray-800 hover:bg-indigo-100 dark:hover:bg-gray-700 text-stripe-blurple dark:text-gray-400 flex items-center justify-center shrink-0 transition-colors shadow-sm"><i class="fa-solid fa-xmark"></i></button></header>
+                        <div class="flex-1 overflow-y-auto no-scrollbar p-5 pb-safe bg-gradient-to-b from-indigo-50/30 to-transparent dark:bg-transparent"><div class="bg-white/90 dark:bg-stripe-darkCard rounded-2xl p-5 border border-indigo-50 dark:border-gray-700 shadow-sm"><p class="whitespace-pre-line text-sm text-slate-700 dark:text-gray-300 leading-loose font-bold">{{ selectedProductDetail.rules }}</p></div></div>
+                    </div>
+                </transition>
+                <transition name="slide-up">
+                    <div v-if="showTermsModal && selectedProductDetail" class="absolute inset-0 z-[60] bg-white/95 backdrop-blur dark:bg-stripe-darkBg flex flex-col h-[100dvh] shadow-2xl transition-colors duration-300">
+                        <header class="bg-white dark:bg-stripe-dark border-b border-indigo-50 dark:border-stripe-darkBorder p-4 flex items-center justify-between shrink-0 shadow-sm z-10 transition-colors"><h2 class="text-base font-extrabold text-indigo-950 dark:text-white flex items-center gap-2 truncate pr-4 tracking-tight">保單條款 - {{ selectedProductDetail.shortName || selectedProductDetail.name }}</h2><button @click="showTermsModal = false" class="w-8 h-8 rounded-full bg-indigo-50 dark:bg-gray-800 hover:bg-indigo-100 dark:hover:bg-gray-700 text-stripe-blurple dark:text-gray-400 flex items-center justify-center shrink-0 transition-colors shadow-sm"><i class="fa-solid fa-xmark"></i></button></header>
+                        <div class="flex-1 overflow-y-auto no-scrollbar p-5 pb-safe bg-gradient-to-b from-indigo-50/30 to-transparent dark:bg-transparent"><div class="bg-white/90 dark:bg-stripe-darkCard rounded-2xl p-5 border border-indigo-50 dark:border-gray-700 shadow-sm text-sm text-slate-700 dark:text-gray-300 leading-loose font-bold"><p class="whitespace-pre-line">{{ selectedProductDetail.termsContent }}</p></div></div>
+                    </div>
+                </transition>
+                <!-- ================= Modal: 選擇比較商品 (輔助視窗) ================= -->
+                <transition name="slide-up">
+                    <div v-if="showProductSelectorModal" class="absolute inset-0 z-[70] bg-slate-50 dark:bg-stripe-darkBg flex flex-col h-[100dvh] shadow-2xl transition-colors duration-300">
+                        <header class="bg-white/90 backdrop-blur dark:bg-stripe-dark border-b border-indigo-100/50 dark:border-stripe-darkBorder p-4 flex items-center justify-between shrink-0 shadow-sm z-10 transition-colors"><h2 class="text-base font-extrabold text-indigo-950 dark:text-white tracking-tight">選擇比較商品</h2><button @click="closeProductSelector" class="w-8 h-8 rounded-full bg-indigo-50 dark:bg-gray-800 hover:bg-indigo-100 dark:hover:bg-gray-700 text-stripe-blurple dark:text-gray-400 flex items-center justify-center shrink-0 transition-colors shadow-sm"><i class="fa-solid fa-xmark"></i></button></header>
+                        <div class="flex bg-white dark:bg-stripe-darkCard border-b border-indigo-100/50 dark:border-gray-800 shrink-0 px-2 pt-2 gap-2">
+                            <button @click="selectorActiveTab = 'single'" class="flex-1 py-2.5 text-xs font-bold transition-all border-b-2" :class="selectorActiveTab === 'single' ? 'border-stripe-blurple text-stripe-blurple' : 'border-transparent text-indigo-400 hover:text-indigo-600'">單一商品</button>
+                            <button @click="selectorActiveTab = 'recommended'" class="flex-1 py-2.5 text-xs font-bold transition-all border-b-2" :class="selectorActiveTab === 'recommended' ? 'border-stripe-blurple text-stripe-blurple' : 'border-transparent text-indigo-400 hover:text-indigo-600'">推薦組合</button>
+                            <button @click="selectorActiveTab = 'custom'" class="flex-1 py-2.5 text-xs font-bold transition-all border-b-2" :class="selectorActiveTab === 'custom' ? 'border-stripe-blurple text-stripe-blurple' : 'border-transparent text-indigo-400 hover:text-indigo-600'">我的組合</button>
+                        </div>
+                        <div v-show="selectorActiveTab === 'single'" class="bg-white/95 backdrop-blur dark:bg-stripe-darkCard border-b border-indigo-50 dark:border-gray-800 shrink-0 shadow-[0_4px_20px_rgba(99,91,255,0.04)] transition-all flex flex-col">
+                            <div class="px-5 py-3 flex justify-between items-center cursor-pointer prevent-select transition-colors border-b border-transparent" :class="{'border-indigo-50 dark:border-gray-800': isSelectorFiltersExpanded}" @click="isSelectorFiltersExpanded = !isSelectorFiltersExpanded">
+                                <span class="text-xs font-extrabold text-indigo-950 dark:text-white flex items-center gap-1.5"><i class="fa-solid fa-filter text-stripe-blurple"></i> 篩選條件</span>
+                                <button class="text-indigo-400 hover:text-stripe-blurple transition-colors"><i class="fa-solid fa-chevron-down text-xs transition-transform duration-300" :class="{'rotate-180': !isSelectorFiltersExpanded}"></i></button>
+                            </div>
+                            <div v-show="isSelectorFiltersExpanded" class="px-5 pb-5 pt-2 space-y-4">
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div class="col-span-2 sm:col-span-1"><label class="block text-[10px] font-extrabold text-indigo-400 dark:text-gray-400 mb-1.5 uppercase tracking-wider">保險公司</label><searchable-select v-model="searchComp" :options="modalCompanyOptions" placeholder="全部保險公司"></searchable-select></div>
+                                    <div class="col-span-2 sm:col-span-1"><label class="block text-[10px] font-extrabold text-indigo-400 dark:text-gray-400 mb-1.5 uppercase tracking-wider">商品名稱</label><searchable-select v-model="searchProd" :options="modalProductOptions" placeholder="搜尋或選擇商品名稱"></searchable-select></div>
+                                    <div><label class="block text-[10px] font-extrabold text-indigo-400 dark:text-gray-400 mb-1.5 uppercase tracking-wider">約別 / 險種</label><select v-model="searchType" class="w-full bg-white dark:bg-stripe-darkBg border border-indigo-100 dark:border-gray-700 rounded-full px-3 py-2 text-sm outline-none focus:border-stripe-blurple focus:shadow-stripe-focus transition-all text-slate-800 dark:text-white shadow-sm"><option value="">全部</option><option value="主約">主約</option><option value="附約">附約</option><option value="專案">專案組合</option><option value="醫療險">醫療險</option><option value="意外險">意外險</option></select></div>
+                                    <div><label class="block text-[10px] font-extrabold text-indigo-400 dark:text-gray-400 mb-1.5 uppercase tracking-wider">商品狀態</label><select v-model="searchStatus" class="w-full bg-white dark:bg-stripe-darkBg border border-indigo-100 dark:border-gray-700 rounded-full px-3 py-2 text-sm outline-none focus:border-stripe-blurple focus:shadow-stripe-focus transition-all text-slate-800 dark:text-white shadow-sm"><option value="">全部</option><option value="現售">現售</option><option value="停售">停售</option></select></div>
+                                </div>
+                                <div class="flex justify-end pt-2"><button @click="resetModalSearch" class="text-[11px] bg-indigo-50 dark:bg-gray-800 text-indigo-600 dark:text-gray-400 hover:bg-indigo-100 dark:hover:bg-gray-700 hover:text-indigo-800 dark:hover:text-gray-200 px-4 py-2 rounded-full transition-colors font-bold flex items-center gap-1.5"><i class="fa-solid fa-rotate-right"></i> 重設條件</button></div>
+                            </div>
+                        </div>
+                        <div class="flex-1 overflow-y-auto no-scrollbar p-5 pb-safe bg-gradient-to-b from-indigo-50/30 to-transparent dark:bg-transparent">
+                            <div class="space-y-3">
+                                <button v-for="prod in filteredProductsForSelector" :key="prod.id" @click="!isProductSelected(prod.id) && selectProductForSlot(prod.id)" class="w-full bg-white/90 backdrop-blur dark:bg-stripe-darkCard border rounded-2xl p-4 flex items-center justify-between transition-all text-left group shadow-sm" :class="isProductSelected(prod.id) ? 'border-indigo-50 dark:border-gray-800 opacity-50 cursor-not-allowed' : 'border-indigo-100/60 dark:border-gray-700 hover:border-stripe-blurple dark:hover:border-stripe-blurple hover:shadow-[0_4px_15px_rgba(99,91,255,0.15)]'">
+                                    <div class="flex-1 min-w-0 pr-3">
+                                        <div class="text-[10px] mb-2 flex items-center gap-2 flex-wrap font-bold" :class="isProductSelected(prod.id) ? 'text-slate-400 dark:text-gray-600' : 'text-indigo-500 dark:text-gray-400'"><span class="px-2 py-0.5 rounded-full text-[9px] uppercase tracking-wider shadow-sm" :class="prod.saleStatus === '現售' ? 'bg-gradient-to-r from-teal-400 to-emerald-500 text-white border-transparent' : 'bg-gradient-to-r from-rose-400 to-red-500 text-white border-transparent'">{{ prod.saleStatus || '現售' }}</span><span v-if="prod.planType || (prod.insType && prod.insType !== '綜合')" class="bg-indigo-50 dark:bg-gray-800 text-indigo-700 dark:text-gray-300 border border-indigo-100/50 dark:border-gray-700 px-2 py-0.5 rounded-full text-[9px] uppercase tracking-wider">{{ prod.planType || '' }} {{ prod.insType === '綜合' ? '' : (prod.insType || '') }}</span><span class="flex items-center gap-1 text-indigo-400"><i class="fa-regular fa-building"></i> {{ prod.company }}</span></div>
+                                        <div class="font-black text-sm truncate" :class="isProductSelected(prod.id) ? 'text-slate-400 dark:text-gray-600' : 'text-indigo-950 dark:text-white'">{{ prod.name }}</div>
+                                    </div>
+                                    <div class="w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all border" :class="isProductSelected(prod.id) ? 'bg-indigo-50 dark:bg-gray-800 border-indigo-50 dark:border-gray-700 text-indigo-300' : 'bg-white dark:bg-stripe-darkCard border-indigo-100 dark:border-gray-700 text-stripe-blurple group-hover:bg-stripe-blurple group-hover:border-stripe-blurple group-hover:text-white'"><i class="fa-solid" :class="isProductSelected(prod.id) ? 'fa-check' : 'fa-plus text-xs'"></i></div>
+                                </button>
+                                <div v-if="filteredProductsForSelector?.length === 0" class="text-center py-16 text-indigo-300 dark:text-gray-500 flex flex-col items-center justify-center border-2 border-dashed border-indigo-100 dark:border-gray-700 rounded-2xl bg-white/50 backdrop-blur"><i class="fa-solid fa-box-open text-3xl mb-3"></i><span class="text-sm font-bold">找不到相符的商品</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </transition>
+                <!-- ================= Modal: 管理自訂組合 ================= -->
+                <transition name="slide-up">
+                    <div v-if="showCustomComboManagerModal" class="absolute inset-0 z-[75] bg-slate-50 dark:bg-stripe-darkBg flex flex-col h-[100dvh] shadow-2xl transition-colors duration-300">
+                        <header class="bg-white/90 backdrop-blur dark:bg-stripe-dark border-b border-indigo-100/50 dark:border-stripe-darkBorder p-4 flex items-center justify-between shrink-0 shadow-sm z-10 transition-colors">
+                            <h2 class="text-base font-extrabold text-indigo-950 dark:text-white tracking-tight">管理自訂組合</h2>
+                            <button @click="showCustomComboManagerModal = false" class="w-8 h-8 rounded-full bg-indigo-50 dark:bg-gray-800 hover:bg-indigo-100 dark:hover:bg-gray-700 text-stripe-blurple dark:text-gray-400 flex items-center justify-center shrink-0 transition-colors shadow-sm"><i class="fa-solid fa-xmark"></i></button>
+                        </header>
+                        
+                        <div v-if="!editingCombo" class="flex-1 overflow-y-auto no-scrollbar p-5 pb-safe bg-gradient-to-b from-indigo-50/30 to-transparent dark:bg-transparent">
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="font-extrabold text-sm text-indigo-950 dark:text-white">我的組合列表</h3>
+                                <button @click="startAddCombo" class="text-xs bg-stripe-blurple hover:bg-[#5446E5] text-white px-3 py-1.5 rounded-full font-bold shadow-sm transition-colors"><i class="fa-solid fa-plus mr-1"></i> 新增組合</button>
+                            </div>
+                            <div class="space-y-3">
+                                <div v-for="combo in customCombos" :key="combo.id" class="bg-white dark:bg-stripe-darkCard border border-indigo-100/60 dark:border-gray-700 rounded-xl p-4 shadow-sm flex items-center justify-between">
+                                    <div>
+                                        <div class="font-extrabold text-indigo-950 dark:text-white text-sm mb-1">{{ combo.name }}</div>
+                                        <div class="text-[10px] text-indigo-400 dark:text-gray-400 font-bold">包含 {{ combo.subItems?.length || 0 }} 項商品</div>
+                                    </div>
+                                    <div class="flex gap-2">
+                                        <button @click="startEditCombo(combo)" class="w-8 h-8 rounded-full bg-indigo-50 dark:bg-gray-800 text-stripe-blurple hover:bg-indigo-100 dark:hover:bg-gray-700 flex items-center justify-center transition-colors"><i class="fa-solid fa-pen text-xs"></i></button>
+                                        <button @click="deleteCombo(combo.id)" class="w-8 h-8 rounded-full bg-rose-50 dark:bg-rose-900/30 text-rose-500 hover:bg-rose-100 dark:hover:bg-rose-900/50 flex items-center justify-center transition-colors"><i class="fa-solid fa-trash-can text-xs"></i></button>
+                                    </div>
+                                </div>
+                                <div v-if="customCombos.length === 0" class="text-center py-10 text-indigo-300 dark:text-gray-500 border-2 border-dashed border-indigo-100 dark:border-gray-700 rounded-xl">
+                                    尚無自訂組合，點擊右上方新增
+                                </div>
+                            </div>
+                        </div>
+
+                        <div v-else class="flex-1 flex flex-col h-full overflow-hidden bg-gradient-to-b from-indigo-50/30 to-transparent dark:bg-transparent">
+                            <div class="p-5 flex-1 overflow-y-auto no-scrollbar space-y-4">
+                                <div><label class="block text-[10px] uppercase font-extrabold text-indigo-500/80 mb-1.5">組合名稱</label><input v-model="editingCombo.name" type="text" placeholder="請輸入自訂組合名稱" class="w-full bg-white dark:bg-stripe-darkBg border border-indigo-100 dark:border-gray-700 text-slate-800 dark:text-white rounded-full px-3 py-2.5 text-sm font-bold focus:border-stripe-blurple focus:shadow-stripe-focus outline-none shadow-sm"></div>
+                                <div class="bg-white/90 dark:bg-stripe-darkCard border border-indigo-100/60 dark:border-gray-700 rounded-xl p-4 shadow-sm">
+                                    <div class="flex justify-between items-center mb-3"><label class="text-[11px] font-extrabold text-indigo-950 dark:text-white uppercase tracking-widest">包含商品</label><button @click="openComboItemSelector" class="text-[10px] text-stripe-blurple font-bold hover:text-indigo-600 bg-indigo-50 dark:bg-gray-800 px-2.5 py-1 rounded-full shadow-sm border border-indigo-100 dark:border-gray-700"><i class="fa-solid fa-plus"></i> 加入商品</button></div>
+                                    <div class="space-y-3">
+                                        <div v-for="(item, idx) in editingCombo.subItems" :key="idx" class="flex gap-2 items-center bg-indigo-50/30 dark:bg-gray-800/50 p-2.5 rounded-lg border border-indigo-50 dark:border-gray-700 relative">
+                                            <div class="absolute left-0 top-2 bottom-2 w-0.5 bg-stripe-blurple rounded-r-md"></div>
+                                            <div class="flex-1 pl-1">
+                                                <div class="w-full text-left bg-white/50 dark:bg-stripe-darkBg border border-indigo-50 dark:border-gray-700 text-slate-800 dark:text-white rounded-lg px-3 py-2 text-xs shadow-sm flex items-center justify-between">
+                                                    <span class="truncate font-bold">{{ item.name }}</span>
+                                                </div>
+                                            </div>
+                                    <button @click="removeComboItem(idx)" class="w-8 h-8 flex justify-center items-center shrink-0 text-rose-400 hover:text-rose-600 transition-colors"><i class="fa-solid fa-trash-can"></i></button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="p-5 bg-white/90 backdrop-blur dark:bg-stripe-dark border-t border-indigo-100/50 dark:border-stripe-darkBorder pb-safe shrink-0"><div class="flex gap-3"><button @click="cancelEditCombo" class="flex-1 py-3 bg-white dark:bg-stripe-darkCard border border-indigo-100 dark:border-gray-700 text-slate-700 dark:text-gray-300 text-sm font-bold rounded-full shadow-sm hover:bg-indigo-50 dark:hover:bg-gray-800 transition-colors">取消</button><button @click="saveCombo" class="flex-1 py-3 bg-gradient-to-r from-stripe-blurple to-indigo-600 text-white text-sm font-bold rounded-full shadow-[0_4px_15px_rgba(99,91,255,0.3)] hover:opacity-90 transition-colors">儲存組合</button></div></div>
+                        </div>
+                    </div>
+                </transition>
+                <!-- ================= Modal: 選擇自訂組合內的單一商品 (輔助視窗) ================= -->
+                <transition name="slide-up">
+                    <div v-if="showComboItemSelectorModal" class="absolute inset-0 z-[80] bg-slate-50 dark:bg-stripe-darkBg flex flex-col h-[100dvh] shadow-2xl transition-colors duration-300">
+                        <header class="bg-white/90 backdrop-blur dark:bg-stripe-dark border-b border-indigo-100/50 dark:border-stripe-darkBorder p-4 flex items-center justify-between shrink-0 shadow-sm z-10 transition-colors"><h2 class="text-base font-extrabold text-indigo-950 dark:text-white tracking-tight">選擇組合商品</h2><button @click="closeComboItemSelector" class="w-8 h-8 rounded-full bg-indigo-50 dark:bg-gray-800 hover:bg-indigo-100 dark:hover:bg-gray-700 text-stripe-blurple dark:text-gray-400 flex items-center justify-center shrink-0 transition-colors shadow-sm"><i class="fa-solid fa-xmark"></i></button></header>
+                        <div class="bg-white/95 backdrop-blur dark:bg-stripe-darkCard border-b border-indigo-50 dark:border-gray-800 shrink-0 shadow-[0_4px_20px_rgba(99,91,255,0.04)] transition-all flex flex-col">
+                            <div class="px-5 py-3 flex justify-between items-center cursor-pointer prevent-select transition-colors border-b border-transparent" :class="{'border-indigo-50 dark:border-gray-800': isComboSelectorFiltersExpanded}" @click="isComboSelectorFiltersExpanded = !isComboSelectorFiltersExpanded">
+                                <span class="text-xs font-extrabold text-indigo-950 dark:text-white flex items-center gap-1.5"><i class="fa-solid fa-filter text-stripe-blurple"></i> 篩選條件</span>
+                                <button class="text-indigo-400 hover:text-stripe-blurple transition-colors"><i class="fa-solid fa-chevron-down text-xs transition-transform duration-300" :class="{'rotate-180': !isComboSelectorFiltersExpanded}"></i></button>
+                            </div>
+                            <div v-show="isComboSelectorFiltersExpanded" class="px-5 pb-5 pt-2 space-y-4">
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div class="col-span-2 sm:col-span-1"><label class="block text-[10px] font-extrabold text-indigo-400 dark:text-gray-400 mb-1.5 uppercase tracking-wider">保險公司</label><searchable-select v-model="comboSearchComp" :options="modalCompanyOptions" placeholder="全部保險公司"></searchable-select></div>
+                                    <div class="col-span-2 sm:col-span-1"><label class="block text-[10px] font-extrabold text-indigo-400 dark:text-gray-400 mb-1.5 uppercase tracking-wider">商品名稱</label><searchable-select v-model="comboSearchProd" :options="comboModalProductOptions" placeholder="搜尋或選擇商品名稱"></searchable-select></div>
+                                    <div><label class="block text-[10px] font-extrabold text-indigo-400 dark:text-gray-400 mb-1.5 uppercase tracking-wider">約別 / 險種</label><select v-model="comboSearchType" class="w-full bg-white dark:bg-stripe-darkBg border border-indigo-100 dark:border-gray-700 rounded-full px-3 py-2 text-sm outline-none focus:border-stripe-blurple focus:shadow-stripe-focus transition-all text-slate-800 dark:text-white shadow-sm"><option value="">全部</option><option value="主約">主約</option><option value="附約">附約</option><option value="醫療險">醫療險</option><option value="意外險">意外險</option></select></div>
+                                    <div><label class="block text-[10px] font-extrabold text-indigo-400 dark:text-gray-400 mb-1.5 uppercase tracking-wider">商品狀態</label><select v-model="comboSearchStatus" class="w-full bg-white dark:bg-stripe-darkBg border border-indigo-100 dark:border-gray-700 rounded-full px-3 py-2 text-sm outline-none focus:border-stripe-blurple focus:shadow-stripe-focus transition-all text-slate-800 dark:text-white shadow-sm"><option value="">全部</option><option value="現售">現售</option><option value="停售">停售</option></select></div>
+                                </div>
+                                <div class="flex justify-end pt-2"><button @click="resetComboModalSearch" class="text-[11px] bg-indigo-50 dark:bg-gray-800 text-indigo-600 dark:text-gray-400 hover:bg-indigo-100 dark:hover:bg-gray-700 hover:text-indigo-800 dark:hover:text-gray-200 px-4 py-2 rounded-full transition-colors font-bold flex items-center gap-1.5"><i class="fa-solid fa-rotate-right"></i> 重設條件</button></div>
+                            </div>
+                        </div>
+                        <div class="flex-1 overflow-y-auto no-scrollbar p-5 pb-24 bg-gradient-to-b from-indigo-50/30 to-transparent dark:bg-transparent">
+                            <div class="space-y-3">
+                                <button v-for="prod in comboFilteredProducts" :key="prod.id" @click="toggleComboItemSelection(prod.id)" class="w-full border rounded-2xl p-4 flex items-center justify-between transition-all text-left group shadow-sm" :class="tempSelectedComboItems.has(prod.id) ? 'bg-indigo-50 dark:bg-indigo-900/30 border-stripe-blurple shadow-md ring-1 ring-stripe-blurple/30' : 'bg-white/90 backdrop-blur dark:bg-stripe-darkCard border-indigo-100/60 dark:border-gray-700 hover:border-stripe-blurple hover:shadow-[0_4px_15px_rgba(99,91,255,0.15)]'">
+                                    <div class="flex-1 min-w-0 pr-3">
+                                        <div class="text-[10px] mb-2 flex items-center gap-2 flex-wrap font-bold text-indigo-500 dark:text-gray-400"><span class="px-2 py-0.5 rounded-full text-[9px] uppercase tracking-wider shadow-sm" :class="prod.saleStatus === '現售' ? 'bg-gradient-to-r from-teal-400 to-emerald-500 text-white border-transparent' : 'bg-gradient-to-r from-rose-400 to-red-500 text-white border-transparent'">{{ prod.saleStatus || '現售' }}</span><span v-if="prod.planType || (prod.insType && prod.insType !== '綜合')" class="bg-indigo-50 dark:bg-gray-800 text-indigo-700 dark:text-gray-300 border border-indigo-100/50 dark:border-gray-700 px-2 py-0.5 rounded-full text-[9px] uppercase tracking-wider">{{ prod.planType || '' }} {{ prod.insType === '綜合' ? '' : (prod.insType || '') }}</span><span class="flex items-center gap-1 text-indigo-400"><i class="fa-regular fa-building"></i> {{ prod.company }}</span></div>
+                                        <div class="font-black text-sm truncate text-indigo-950 dark:text-white">{{ prod.name }}</div>
+                                    </div>
+                                    <div class="w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all border" :class="tempSelectedComboItems.has(prod.id) ? 'bg-stripe-blurple text-white border-stripe-blurple' : 'bg-white dark:bg-stripe-darkCard border-indigo-100 dark:border-gray-700 text-stripe-blurple group-hover:bg-stripe-blurple group-hover:text-white'"><i class="fa-solid text-xs" :class="tempSelectedComboItems.has(prod.id) ? 'fa-check' : 'fa-plus'"></i></div>
+                                </button>
+                                <div v-if="comboFilteredProducts?.length === 0" class="text-center py-16 text-indigo-300 dark:text-gray-500 flex flex-col items-center justify-center border-2 border-dashed border-indigo-100 dark:border-gray-700 rounded-2xl bg-white/50 backdrop-blur"><i class="fa-solid fa-box-open text-3xl mb-3"></i><span class="text-sm font-bold">找不到相符的商品</span></div>
+                            </div>
+                        </div>
+                        <div class="absolute bottom-0 left-0 right-0 p-5 bg-white/90 backdrop-blur dark:bg-stripe-dark border-t border-indigo-100/50 dark:border-stripe-darkBorder pb-safe transition-colors z-20">
+                            <button @click="confirmComboItemsSelection" :disabled="tempSelectedComboItems.size === 0" class="w-full py-3.5 bg-gradient-to-r from-stripe-blurple to-indigo-600 hover:from-[#5446E5] hover:to-indigo-700 text-white rounded-full font-bold shadow-[0_4px_15px_rgba(99,91,255,0.3)] transition-opacity flex items-center justify-center gap-2 disabled:opacity-50 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed">確認加入 <span v-if="tempSelectedComboItems.size > 0">({{ tempSelectedComboItems.size }})</span></button>
+                        </div>
+                    </div>
+                </transition>
+                <nav id="tour-nav" class="absolute bottom-0 w-full bg-white/80 backdrop-blur-xl dark:bg-stripe-dark 
+                    border-t border-indigo-100/60 dark:border-stripe-darkBorder flex pb-safe pt-2 z-30 transition-colors 
+                    duration-300 shadow-[0_-10px_30px_rgba(99,91,255,0.06)] dark:shadow-none">
+                    <button v-for="nav in navItems" :key="nav.id" @click="activeTab = nav.id" class="flex flex-col items-center justify-center min-w-[64px] flex-1 h-14 relative transition-colors group" :class="activeTab === nav.id ? 'text-stripe-blurple' : 'text-indigo-300 hover:text-indigo-500 dark:hover:text-gray-300'">
+                        <div v-show="activeTab === nav.id" class="absolute top-0 w-10 h-1 bg-gradient-to-r from-stripe-blurple to-fuchsia-500 rounded-b-md -mt-2"></div>
+                        <i :class="[nav.icon, {'scale-110': activeTab === nav.id, 'group-hover:scale-110': activeTab !== nav.id}]" class="text-[20px] mb-1.5 transition-transform"></i>
+                        <span class="text-[10px] font-extrabold tracking-wide">{{ nav.label }}</span>
+                    </button>
+                </nav>
+            </div>
+        </transition>
+    </div>
+    
+    <!-- 引入拆分後的獨立 JS 檔案 -->
+    <script src="script.js"></script>
+</body>
+</html>
