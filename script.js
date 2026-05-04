@@ -167,8 +167,10 @@
                                      <div class="spark-particle w-2 h-2 rounded-sm bg-indigo-300 shadow-[0_0_8px_rgba(165,180,252,0.8)]" style="--sx: -15px; --sy: 50px;"></div>
                                  </div>
 
-                                 <div class="w-14 h-14 rounded-full border flex items-center justify-center transition-all duration-200 shadow-lg relative" :class="activeOptionId === opt.id ? opt.borderClass + ' ' + opt.bgClass + ' ' + opt.colorClass : 'border-white/20 bg-white/10 text-white/70 shadow-none'"><i :class="opt.icon" class="text-xl relative z-10"></i></div>
-                                 <span class="absolute top-[calc(100%+8px)] whitespace-nowrap text-[10px] font-bold tracking-wider transition-all duration-200" :class="activeOptionId === opt.id ? 'text-cyan-300 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)] scale-105' : 'text-white/50 scale-95'">{{ opt.label }}</span>
+                                 <div class="w-14 h-14 rounded-full border flex items-center justify-center transition-all duration-200 shadow-lg relative" :class="activeOptionId === opt.id ? opt.borderClass + ' ' + opt.bgClass + ' ' + opt.colorClass : 'border-white/20 bg-white/10 text-white/70 shadow-none'">
+                                     <i :class="[opt.icon, 'text-xl relative z-10 transition-colors duration-200', sparkActiveId === opt.id ? 'text-white' : '']" :style="sparkActiveId === opt.id ? 'animation: iconImpact 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;' : ''"></i>
+                                 </div>
+                                 <span class="absolute top-[calc(100%+8px)] whitespace-nowrap text-[10px] font-bold tracking-wider transition-all duration-200" :class="activeOptionId === opt.id ? 'text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.6)] scale-105' : 'text-white/70 scale-95'">{{ opt.label }}</span>
                             </div>
                             <div class="absolute left-1/2 top-[15%] transform -translate-x-1/2 text-center w-full px-8 pointer-events-none transition-opacity duration-300" :style="{ opacity: isEntering ? 1 : 0 }">
                                 <h2 class="text-xl font-extrabold text-white mb-2 truncate drop-shadow-[0_0_15px_rgba(255,255,255,0.3)]">{{ displayText }}</h2>
