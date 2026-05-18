@@ -297,8 +297,20 @@
                                 </div>
                                 <transition name="fade">
                                     <div v-if="selectedIncident" class="space-y-6">
-                                        <!-- 選擇客戶 -->
-                                        <div>
+                                        <!-- 切換流程模式 -->
+                                        <div class="relative flex bg-indigo-50/80 dark:bg-gray-800/80 rounded-2xl p-1.5 border border-indigo-100/50 dark:border-gray-700 shadow-inner">
+                                            <button @click="claimFlowMode = 'customer'" class="flex-1 py-2.5 text-[13px] font-extrabold rounded-xl transition-all flex items-center justify-center gap-2 z-10" :class="claimFlowMode === 'customer' ? 'bg-white dark:bg-stripe-darkCard text-stripe-blurple shadow-[0_4px_12px_rgba(99,91,255,0.15)] ring-1 ring-black/5 dark:ring-white/10' : 'text-indigo-400 hover:text-indigo-600 dark:hover:text-gray-300'">
+                                                <i class="fa-solid fa-wand-magic-sparkles"></i> 智能試算與比對
+                                            </button>
+                                            <button @click="claimFlowMode = 'documents'" class="flex-1 py-2.5 text-[13px] font-extrabold rounded-xl transition-all flex items-center justify-center gap-2 z-10" :class="claimFlowMode === 'documents' ? 'bg-white dark:bg-stripe-darkCard text-stripe-blurple shadow-[0_4px_12px_rgba(99,91,255,0.15)] ring-1 ring-black/5 dark:ring-white/10' : 'text-indigo-400 hover:text-indigo-600 dark:hover:text-gray-300'">
+                                                <i class="fa-solid fa-file-signature"></i> 查詢應備文件
+                                            </button>
+                                        </div>
+
+                                        <!-- 客戶試算流程 -->
+                                        <div v-if="claimFlowMode === 'customer'" class="space-y-6">
+                                            <!-- 選擇客戶 -->
+                                            <div>
                                             <h2 class="text-base font-extrabold text-indigo-950 dark:text-white mb-2">選擇試算客戶</h2>
                                             <div v-if="!selectedClaimCustomer" class="relative">
                                                 <i class="fa-solid fa-magnifying-glass absolute left-4 top-3.5 text-indigo-400"></i>
@@ -320,11 +332,11 @@
                                                 </div>
                                                 <button @click="selectedClaimCustomer = null; claimCalcStatus = 'idle'; estimatedClaimResult = null;" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-rose-50 dark:hover:bg-red-900/30 text-rose-400 hover:text-rose-500 transition-colors"><i class="fa-solid fa-rotate-right text-sm"></i></button>
                                             </div>
-                                        </div>
+                                            </div>
 
-                                        <!-- 匹配保單結果與解析 -->
-                                        <transition name="fade">
-                                            <div v-if="selectedClaimCustomer" class="space-y-4">
+                                            <!-- 匹配保單結果與解析 -->
+                                            <transition name="fade">
+                                                <div v-if="selectedClaimCustomer" class="space-y-4">
                                                 <h2 class="text-base font-extrabold text-indigo-950 dark:text-white mb-2 pt-2 border-t border-indigo-100/60 dark:border-gray-800">AI 智能理賠解析 <i class="fa-solid fa-wand-magic-sparkles text-amber-500 ml-1 text-sm"></i></h2>
                                                 <div v-if="claimCalcStatus === 'idle'">
                                                     <input type="file" id="claimCalcFileInput" class="hidden" accept="image/*,application/pdf" @change="handleClaimCalcUpload">
@@ -343,7 +355,10 @@
                                                 </div>
 
                                                 <div class="mt-6 border-t border-indigo-100/60 dark:border-gray-700 pt-2">
-                                                    <h2 class="text-base font-extrabold text-indigo-950 dark:text-white mb-2">符合保單與應備文件</h2>
+                                                    <div class="flex justify-between items-center mb-2">
+                                                        <h2 class="text-base font-extrabold text-indigo-950 dark:text-white">符合保單與應備文件</h2>
+                                                        <button v-if="matchedClaimCompanies.length > 0" @click="copyMatchedDocs" class="text-[11px] bg-indigo-50 dark:bg-gray-800 text-stripe-blurple dark:text-gray-300 hover:bg-indigo-100 dark:hover:bg-gray-700 px-3 py-1.5 rounded-full font-bold shadow-sm transition-colors flex items-center gap-1.5 border border-indigo-100 dark:border-gray-700"><i class="fa-regular fa-copy"></i> 複製清單</button>
+                                                    </div>
                                                     
                                                     <div v-if="matchedClaimCompanies.length === 0" class="text-center py-8 border-2 border-dashed border-indigo-200 dark:border-gray-700 rounded-2xl bg-white/50 dark:bg-transparent">
                                                         <i class="fa-solid fa-folder-open text-3xl text-indigo-300 dark:text-gray-600 mb-2"></i>
@@ -390,8 +405,51 @@
                                                         </div>
                                                     </div>
                                                 </div>
+                                                </div>
+                                            </transition>
+                                        </div>
+
+                                        <!-- 應備文件手動查詢流程 -->
+                                        <div v-else-if="claimFlowMode === 'documents'" class="space-y-5">
+                                            <!-- 選擇保險公司 -->
+                                            <div class="bg-white/90 backdrop-blur dark:bg-stripe-darkCard p-4 rounded-2xl border border-indigo-100/60 dark:border-gray-700 shadow-sm">
+                                                <h2 class="text-sm font-extrabold text-indigo-950 dark:text-white mb-3">選擇保險公司</h2>
+                                                <searchable-select v-model="docSelectCompany" :options="companyOptions" placeholder="請選擇保險公司"></searchable-select>
                                             </div>
-                                        </transition>
+
+                                            <!-- 選擇申請項目 -->
+                                            <transition name="fade">
+                                                <div v-if="docSelectCompany" class="bg-white/90 backdrop-blur dark:bg-stripe-darkCard p-4 rounded-2xl border border-indigo-100/60 dark:border-gray-700 shadow-sm">
+                                                    <h2 class="text-sm font-extrabold text-indigo-950 dark:text-white mb-3 flex justify-between items-center">
+                                                        選擇申請項目 <span class="text-[10px] text-indigo-400 font-bold bg-indigo-50 dark:bg-gray-800 px-2 py-0.5 rounded-full">可多選</span>
+                                                    </h2>
+                                                    <div class="flex flex-wrap gap-2">
+                                                        <button v-for="item in availableDocItems" :key="item" @click="toggleDocItem(item)" class="px-3 py-2 rounded-xl border text-xs font-bold transition-all shadow-sm" :class="docSelectItems.includes(item) ? 'bg-stripe-blurple text-white border-stripe-blurple shadow-[0_4px_10px_rgba(99,91,255,0.3)]' : 'bg-white dark:bg-stripe-darkBg text-slate-700 dark:text-gray-300 border-indigo-100 dark:border-gray-600 hover:border-stripe-blurple hover:text-stripe-blurple'">
+                                                            <i class="fa-solid fa-check mr-1" :class="docSelectItems.includes(item) ? 'opacity-100' : 'opacity-0 hidden'"></i> {{ item }}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </transition>
+
+                                            <!-- 應備文件結果 -->
+                                            <transition name="fade">
+                                                <div v-if="docSelectItems.length > 0" class="bg-white/90 backdrop-blur dark:bg-stripe-darkCard p-5 rounded-2xl border border-stripe-blurple/30 shadow-sm relative overflow-hidden group">
+                                                    <div class="absolute top-0 right-0 bg-gradient-to-r from-stripe-blurple to-fuchsia-500 w-24 h-24 rounded-bl-full opacity-5 pointer-events-none transition-opacity group-hover:opacity-10"></div>
+                                                    <div class="flex justify-between items-center mb-4 relative z-10">
+                                                        <h2 class="text-sm font-extrabold text-indigo-950 dark:text-white flex items-center gap-2"><i class="fa-solid fa-folder-open text-amber-500"></i> 應備文件清單總覽</h2>
+                                                        <button @click="copyRequiredDocs" class="text-[11px] bg-indigo-50 dark:bg-gray-800 text-stripe-blurple dark:text-gray-300 hover:bg-indigo-100 dark:hover:bg-gray-700 px-3 py-1.5 rounded-full font-bold shadow-sm transition-colors flex items-center gap-1.5 border border-indigo-100 dark:border-gray-700"><i class="fa-regular fa-copy"></i> 複製清單</button>
+                                                    </div>
+                                                    <div class="space-y-2 relative z-10">
+                                                        <div v-for="doc in aggregatedRequiredDocs" :key="doc" class="flex items-start gap-2 bg-slate-50 dark:bg-gray-800/50 px-2 py-1 rounded-lg border border-slate-100 dark:border-gray-700/50">
+                                                            <i class="fa-regular fa-square-check text-amber-500 mt-0.5 text-xs"></i>
+                                                            <div>
+                                                                <div class="text-[11px] font-bold text-slate-700 dark:text-gray-200 leading-tight">{{ doc }}</div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </transition>
+                                        </div>
                                     </div>
                                 </transition>
                             </div>

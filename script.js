@@ -756,7 +756,56 @@
                 const claimSearchQuery = ref(''); const selectedClaimCustomer = ref(null);
                 const claimFilteredCustomers = computed(() => { if (!claimSearchQuery.value) return []; const q = claimSearchQuery.value.toLowerCase(); return customersDB.filter(c => c.name.includes(q) || c.phone.includes(q)); });
                 
-                watch(selectedIncident, () => { claimCalcStatus.value = 'idle'; estimatedClaimResult.value = null; selectedClaimCustomer.value = null; claimSearchQuery.value = ''; });
+                const claimFlowMode = ref('customer');
+                const docSelectCompany = ref('');
+                const docSelectItems = ref([]);
+
+                const genericDocDB = {
+                    '台灣人壽': { '傷害身故保險金': ['理賠申請書', '死亡證明書或相驗屍體證明書', '被保險人除戶戶籍謄本', '受益人之身份證明文件', '保險單', '意外傷害事故證明'], '傷害醫療日額保險金': ['理賠申請書', '詳細醫師診斷書', '傷害事故證明文件'], '傷害限額(實支實付)醫療保險金': ['理賠申請書', '詳細醫師診斷書', '傷害事故證明文件', '收據正本及費用明細表'], '疾病住院日額': ['理賠申請書', '詳細醫師診斷書'], '住院手術醫療': ['理賠申請書', '詳細醫師診斷書(需載明手術名稱)', '費用明細表'] },
+                    '全球人壽': { '身故保險金': ['理賠申請書', '保險單', '相驗屍體證明書或死亡診斷書', '除戶戶籍謄本', '受益人生存證明'], '傷害住院醫療保險金(日額)': ['理賠申請書', '醫療診斷書或住院證明', '意外傷害事故證明文件'], '傷害醫療保險金(實支實付)': ['理賠申請書', '醫療診斷書', '醫療費用收據正本', '意外傷害事故證明文件'], '疾病住院日額': ['理賠申請書', '診斷證明書'], '特定傷病保險金': ['理賠申請書', '特定傷病診斷證明書', '相關檢驗報告'] },
+                    '新光人壽': { '身故保險金': ['理賠申請書', '保險單', '死亡診斷書', '除戶戶籍謄本', '受益人身分證明'], '住院醫療日額': ['理賠申請書', '診斷證明書'], '實支實付醫療': ['理賠申請書', '診斷證明書', '醫療收據正本及明細表'], '手術醫療': ['理賠申請書', '診斷證明書(含手術名稱)', '收據明細'] }
+                };
+
+                const availableDocItems = computed(() => {
+                    if (!docSelectCompany.value) return [];
+                    const compData = genericDocDB[docSelectCompany.value];
+                    if (compData) return Object.keys(compData);
+                    return ['身故保險金', '傷害醫療日額', '傷害醫療實支實付', '疾病住院日額', '住院手術費', '門診手術費'];
+                });
+
+                const toggleDocItem = (item) => {
+                    const idx = docSelectItems.value.indexOf(item);
+                    if (idx > -1) docSelectItems.value.splice(idx, 1);
+                    else docSelectItems.value.push(item);
+                };
+
+                const aggregatedRequiredDocs = computed(() => {
+                    if (docSelectItems.value.length === 0) return [];
+                    const compData = genericDocDB[docSelectCompany.value] || {};
+                    const fallbackDocs = { '身故保險金': ['理賠申請書', '死亡診斷書', '除戶戶籍謄本', '受益人身分證明', '保險單'], '傷害醫療日額': ['理賠申請書', '診斷證明書', '意外事故證明'], '傷害醫療實支實付': ['理賠申請書', '診斷證明書', '醫療收據及明細', '意外事故證明'], '疾病住院日額': ['理賠申請書', '診斷證明書'], '住院手術費': ['理賠申請書', '診斷證明書(需載明手術名稱)', '手術費用明細'], '門診手術費': ['理賠申請書', '診斷證明書(需載明手術名稱)', '門診收據'] };
+                    
+                    const docsSet = new Set();
+                    docSelectItems.value.forEach(item => {
+                        const docs = compData[item] || fallbackDocs[item] || ['理賠申請書', '診斷證明書'];
+                        docs.forEach(d => docsSet.add(d));
+                    });
+                    let arr = Array.from(docsSet);
+                    arr.sort((a, b) => { if (a.includes('申請書')) return -1; if (b.includes('申請書')) return 1; return 0; });
+                    return arr;
+                });
+
+                const copyRequiredDocs = () => {
+                    if (aggregatedRequiredDocs.value.length === 0) return;
+                    const text = `【${docSelectCompany.value}】理賠應備文件：\n\n` + 
+                                 aggregatedRequiredDocs.value.map((doc, idx) => `${idx + 1}. ${doc}`).join('\n') +
+                                 `\n\n(已選擇申請項目：${docSelectItems.value.join('、')})\n※ 實際理賠所需文件可能依保險公司最終審核為準。`;
+                    
+                    copyToClipboard(text);
+                };
+
+                watch(docSelectCompany, () => { docSelectItems.value = []; });
+
+                watch(selectedIncident, () => { claimCalcStatus.value = 'idle'; estimatedClaimResult.value = null; selectedClaimCustomer.value = null; claimSearchQuery.value = ''; claimFlowMode.value = 'customer'; docSelectCompany.value = ''; docSelectItems.value = []; });
                 
                 const matchedClaimCompanies = computed(() => {
                     if (!selectedIncident.value || !selectedClaimCustomer.value) return [];
@@ -801,6 +850,25 @@
                         }
                     ];
                 });
+
+                const copyMatchedDocs = () => {
+                    if (matchedClaimCompanies.value.length === 0) return;
+                    let text = `【理賠試算 - 符合保單與應備文件】\n`;
+                    if (selectedIncident.value) text += `事故類型：${selectedIncident.value.name}\n`;
+                    if (selectedClaimCustomer.value) text += `客戶姓名：${selectedClaimCustomer.value.name}\n\n`;
+
+                    matchedClaimCompanies.value.forEach(comp => {
+                        text += `=== ${comp.company} ===\n`;
+                        text += `符合保單：${comp.policyNumbers.join('、')}\n`;
+                        text += `可申請項目：${comp.items.join('、')}\n`;
+                        text += `應備文件：\n`;
+                        comp.docs.forEach((doc, idx) => { text += `${idx + 1}. ${doc.title}${doc.desc ? ' (' + doc.desc + ')' : ''}\n`; });
+                        text += `\n`;
+                    });
+                    text += `※ 實際理賠所需文件可能依保險公司最終審核為準。`;
+                    copyToClipboard(text);
+                };
+
                 const resetClaimCalc = () => { claimCalcStatus.value = 'idle'; estimatedClaimResult.value = null; };
 
                 const expandedClaimCompanies = ref({});
@@ -969,6 +1037,7 @@
                     isRecording, toggleVoiceInput, startDrag, onDrag, stopDrag,
                     claimIncidents, selectedIncident, claimCalcStatus, estimatedClaimResult, handleClaimCalcUpload, resetClaimCalc,
                     claimSearchQuery, selectedClaimCustomer, claimFilteredCustomers, matchedClaimCompanies,
+                    claimFlowMode, docSelectCompany, docSelectItems, availableDocItems, toggleDocItem, aggregatedRequiredDocs, copyRequiredDocs, copyMatchedDocs,
                     expandedClaimCompanies, toggleClaimCompany,
                     searchQuery, selectedCustomer, filteredCustomers, selectCustomer, clearCustomer, isCustomerExpanded, isEditingCustomer, editCustomerData, toggleCustomerInfo, startEditCustomer, saveCustomerInfo, cancelEditCustomer, calculateAge, expandedPolicies, editingPolicies, editPolicyData, togglePolicy, startEditPolicy, saveEditPolicy, cancelEditPolicy, deletePolicy, showAddPolicyForm, addPolicyFormRef, handleAddPolicyClick, addPolicyMethod, isOcrProcessing, newPolicyData, handleFileUpload, savePolicy, cancelAddPolicy, isSummaryExpanded,
                     compareList, showGamifiedModal, addToCompare, updateCompareList, handleAnalyzeAction, 
