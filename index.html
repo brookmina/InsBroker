@@ -154,7 +154,11 @@
                                         <div class="flex items-end gap-2 max-w-[90%]">
                                             <div v-if="msg.role === 'bot'" class="w-8 h-8 rounded-full bg-gradient-to-br from-stripe-blurple to-purple-500 dark:bg-stripe-darkCard border border-white/20 dark:border-gray-700 text-white flex items-center justify-center flex-shrink-0 shadow-sm mb-1 overflow-hidden"><img src="img/aiimg.png" alt="AI" class="w-5 h-5 object-contain"></div>
                                             <div class="px-4 py-3 shadow-sm text-sm w-full font-medium" :class="msg.role === 'user' ? 'bg-gradient-to-r from-stripe-blurple to-indigo-500 text-white rounded-2xl rounded-tr-sm shadow-[0_4px_15px_rgba(99,91,255,0.2)]' : 'bg-white/95 backdrop-blur-sm dark:bg-stripe-darkCard text-slate-800 dark:text-gray-200 rounded-2xl rounded-tl-sm border border-indigo-50 dark:border-stripe-darkBorder'">
-                                                <div v-if="msg.attachment" class="rounded-lg p-2.5 mb-2 flex items-center gap-2 text-xs bg-black/10 dark:bg-gray-800 border border-white/20 dark:border-gray-700"><i class="fa-solid fa-file-invoice text-base opacity-80"></i><span class="truncate max-w-[150px]">{{ msg.attachment.name }}</span></div>
+                                                <div v-if="msg.attachments && msg.attachments.length > 0" class="flex flex-col gap-1.5 mb-2">
+                                                    <div v-for="(att, idx) in msg.attachments" :key="idx" class="rounded-lg p-2.5 flex items-center gap-2 text-xs bg-black/10 dark:bg-gray-800 border border-white/20 dark:border-gray-700">
+                                                        <i class="fa-solid fa-file-invoice text-base opacity-80"></i><span class="truncate max-w-[150px]">{{ att.name }}</span>
+                                                    </div>
+                                                </div>
                                                 <p class="whitespace-pre-line leading-relaxed" v-if="msg.text" v-html="msg.text"></p>
                                                 
                                                 <!-- 理賠試算結果 -->
@@ -225,14 +229,56 @@
                                     <div id="tour-quick-queries" class="mb-3 flex flex-nowrap overflow-x-auto no-scrollbar gap-2 pb-1 cursor-grab active:cursor-grabbing prevent-select" ref="quickQueryContainer" @mousedown="startDrag" @mousemove="onDrag" @mouseup="stopDrag" @mouseleave="stopDrag">
                                         <button v-for="query in quickQueries" :key="query" @click="handleQuickQuery(query)" class="whitespace-nowrap px-3.5 py-1.5 bg-white dark:bg-gray-800 text-indigo-700 dark:text-gray-300 text-xs font-bold rounded-full border border-indigo-100 dark:border-gray-700 flex items-center gap-1.5 select-none hover:bg-indigo-50 hover:border-stripe-blurple dark:hover:bg-gray-700 transition-colors shadow-sm"><i class="fa-solid fa-bolt text-stripe-blurple"></i> {{ query }}</button>
                                     </div>
-                                    <form id="tour-chat-input" @submit.prevent="sendMessage(userInput)" class="flex gap-2 relative items-center">
-                                        <button type="button" @click="triggerChatFileUpload" class="w-10 h-10 shrink-0 text-indigo-400 hover:text-stripe-blurple dark:hover:text-stripe-blurple hover:bg-white dark:hover:bg-gray-800 rounded-full flex items-center justify-center transition-colors shadow-sm bg-indigo-50/50 dark:bg-transparent"><i class="fa-solid fa-paperclip text-lg"></i></button>
-                                        <input type="file" ref="chatFileInput" class="hidden" @change="handleChatFileUpload" accept="image/*,.pdf,.doc,.docx">
-                                        <div class="flex-1 bg-white/80 backdrop-blur dark:bg-stripe-darkBg rounded-full flex items-center relative overflow-hidden transition-shadow focus-within:ring-2 focus-within:ring-stripe-blurple/50 border border-indigo-100 dark:border-stripe-darkBorder shadow-sm">
-                                            <input type="text" v-model="userInput" :placeholder="isRecording ? '🎙️ 聆聽中...' : '輸入問題...'" class="w-full bg-transparent border-none px-4 py-2.5 text-sm focus:outline-none h-11 text-indigo-950 dark:text-white placeholder-indigo-300">
+
+                                    <!-- 檔案預覽區塊 -->
+                                    <transition name="fade">
+                                        <div v-if="chatAttachments && chatAttachments.length > 0" class="mb-2 flex flex-wrap gap-2 max-h-32 overflow-y-auto no-scrollbar items-start">
+                                            <div v-for="(file, idx) in chatAttachments" :key="idx" class="flex items-center gap-2 bg-white dark:bg-stripe-darkCard border border-indigo-100 dark:border-gray-700 rounded-xl p-1.5 shadow-sm w-fit max-w-[220px] sm:max-w-[260px]">
+                                                <div class="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-gray-800 flex items-center justify-center shrink-0 text-stripe-blurple"><i class="fa-solid fa-file-invoice text-xs"></i></div>
+                                                <div class="flex flex-col min-w-0 flex-1">
+                                                    <span class="text-[11px] font-bold text-slate-800 dark:text-gray-200 truncate leading-tight">{{ file.name }}</span>
+                                                    <span v-if="file.size" class="text-[9px] text-indigo-400 font-medium truncate leading-tight mt-0.5">{{ (file.size / 1024).toFixed(1) }} KB</span>
+                                                </div>
+                                                <button type="button" @click="removeChatAttachment(idx)" class="w-6 h-6 rounded-full hover:bg-rose-50 dark:hover:bg-rose-900/30 text-rose-400 hover:text-rose-500 transition-colors flex items-center justify-center shrink-0 ml-1 shadow-sm">
+                                                    <i class="fa-solid fa-xmark text-[10px]"></i>
+                                                </button>
+                                            </div>
                                         </div>
-                                        <button type="button" @click="toggleVoiceInput" class="w-10 h-10 shrink-0 rounded-full flex items-center justify-center transition-all border shadow-sm" :class="isRecording ? 'bg-rose-50 dark:bg-red-900/30 text-rose-500 border-rose-200 dark:border-red-800 animate-pulse' : 'bg-white dark:bg-stripe-darkCard text-indigo-500 dark:text-gray-400 border-indigo-100 dark:border-gray-700 hover:text-stripe-blurple hover:bg-indigo-50'"><i class="fa-solid" :class="isRecording ? 'fa-microphone-lines' : 'fa-microphone text-base'"></i></button>
-                                        <button type="submit" :disabled="(!userInput?.trim() && !chatAttachment) || isTyping" class="bg-stripe-blurple disabled:bg-indigo-200 dark:disabled:bg-gray-700 text-white w-10 h-10 shrink-0 rounded-full flex items-center justify-center shadow-[0_4px_15px_rgba(99,91,255,0.3)] transition-colors"><i class="fa-solid fa-paper-plane text-sm"></i></button>
+                                    </transition>
+
+                                    <form id="tour-chat-input" @submit.prevent="sendMessage(userInput)" class="flex flex-col gap-2 relative">
+                                        <div class="w-full bg-white/80 backdrop-blur dark:bg-stripe-darkBg rounded-2xl flex items-center relative overflow-hidden transition-shadow focus-within:ring-2 focus-within:ring-stripe-blurple/50 border border-indigo-100 dark:border-stripe-darkBorder shadow-sm">
+                                            <textarea ref="chatInputRef" v-model="userInput" @keydown.enter.exact.prevent="sendMessage(userInput)" :placeholder="isRecording ? '🎙️ 聆聽中...' : (chatActionTag ? '輸入關鍵字...' : '輸入問題...')" rows="1" class="w-full bg-transparent border-none py-[10px] px-4 text-sm focus:outline-none text-indigo-950 dark:text-white placeholder-indigo-300 resize-none overflow-y-auto no-scrollbar max-h-32 block leading-[24px]" style="min-height: 44px;"></textarea>
+                                        </div>
+                                        <div class="flex justify-between items-center w-full px-1">
+                                            <div class="flex items-center gap-2">
+                                                <button type="button" title="上傳檔案" @click="triggerChatFileUpload" class="w-9 h-9 shrink-0 text-indigo-400 hover:text-stripe-blurple dark:hover:text-stripe-blurple hover:bg-white dark:hover:bg-gray-800 rounded-full flex items-center justify-center transition-colors shadow-sm bg-indigo-50/50 dark:bg-transparent"><i class="fa-solid fa-paperclip text-base"></i></button>
+                                                <input type="file" multiple ref="chatFileInput" class="hidden" @change="handleChatFileUpload" accept="image/*,.pdf,.doc,.docx">
+                                                <div class="relative group outline-none" tabindex="0">
+                                                    <button type="button" class="w-9 h-9 shrink-0 text-indigo-400 hover:text-stripe-blurple dark:hover:text-stripe-blurple hover:bg-white dark:hover:bg-gray-800 rounded-full flex items-center justify-center transition-colors shadow-sm bg-indigo-50/50 dark:bg-transparent focus:outline-none">
+                                                        <i class="fa-solid fa-filter text-base transition-transform duration-300 group-hover:scale-110 group-focus-within:scale-110"></i>
+                                                    </button>
+                                                    <div class="absolute bottom-full left-0 mb-2 w-32 bg-white dark:bg-stripe-darkCard border border-indigo-100 dark:border-gray-700 rounded-2xl shadow-[0_8px_30px_rgba(99,91,255,0.15)] opacity-0 invisible group-hover:opacity-100 group-hover:visible group-focus-within:opacity-100 group-focus-within:visible transition-all duration-200 flex flex-col p-1.5 z-50 origin-bottom-left scale-95 group-hover:scale-100 group-focus-within:scale-100">
+                                                        <button type="button" @mousedown.prevent @click="setChatActionTag('查商品')" class="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold text-indigo-950 dark:text-gray-200 hover:bg-indigo-50 dark:hover:bg-gray-800 rounded-xl transition-colors">
+                                                            <i class="fa-solid fa-box-open w-4 text-center text-stripe-blurple"></i> 查商品
+                                                        </button>
+                                                        <button type="button" @mousedown.prevent @click="setChatActionTag('查客戶')" class="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold text-indigo-950 dark:text-gray-200 hover:bg-indigo-50 dark:hover:bg-gray-800 rounded-xl transition-colors">
+                                                            <i class="fa-solid fa-users w-4 text-center text-stripe-blurple"></i> 查客戶
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                <transition name="fade">
+                                                    <div v-if="chatActionTag" class="flex items-center gap-1 px-2.5 py-1 bg-indigo-100 dark:bg-indigo-900/50 text-stripe-blurple dark:text-indigo-300 text-[11px] font-extrabold rounded-full shrink-0 select-none border border-indigo-200 dark:border-indigo-800/50 shadow-sm">
+                                                        <i class="fa-solid" :class="chatActionTag === '查商品' ? 'fa-box-open' : 'fa-users'"></i> {{ chatActionTag }}
+                                                        <button type="button" @click="chatActionTag = null" class="w-4 h-4 ml-0.5 rounded-full flex items-center justify-center hover:bg-indigo-200 dark:hover:bg-indigo-800 text-indigo-400 hover:text-stripe-blurple transition-colors"><i class="fa-solid fa-xmark text-[10px]"></i></button>
+                                                    </div>
+                                                </transition>
+                                            </div>
+                                            <div class="flex items-center gap-2">
+                                                <button type="button" @click="toggleVoiceInput" class="w-9 h-9 shrink-0 rounded-full flex items-center justify-center transition-all border shadow-sm" :class="isRecording ? 'bg-rose-50 dark:bg-red-900/30 text-rose-500 border-rose-200 dark:border-red-800 animate-pulse' : 'bg-white dark:bg-stripe-darkCard text-indigo-500 dark:text-gray-400 border-indigo-100 dark:border-gray-700 hover:text-stripe-blurple hover:bg-indigo-50'"><i class="fa-solid" :class="isRecording ? 'fa-microphone-lines' : 'fa-microphone text-sm'"></i></button>
+                                                <button type="submit" :disabled="(!userInput?.trim() && chatAttachments.length === 0) || isTyping" class="bg-stripe-blurple disabled:bg-indigo-200 dark:disabled:bg-gray-700 text-white w-9 h-9 shrink-0 rounded-full flex items-center justify-center shadow-[0_4px_15px_rgba(99,91,255,0.3)] transition-colors"><i class="fa-solid fa-paper-plane text-xs"></i></button>
+                                            </div>
+                                        </div>
                                     </form>
                                 </div>
                             </div>
@@ -618,6 +664,33 @@
                                             </div>
                                         </transition>
                                     </div>
+
+                                    <!-- 當年度保障總表 -->
+                                    <div class="mt-4 bg-white/90 backdrop-blur dark:bg-stripe-darkCard rounded-2xl p-5 shadow-[0_8px_30px_rgba(99,91,255,0.06)] border border-indigo-50 dark:border-gray-700" v-if="selectedCustomer.policies && selectedCustomer.policies.length > 0">
+                                        <div class="flex justify-between items-center cursor-pointer select-none group" @click="isSummaryExpanded = !isSummaryExpanded">
+                                            <h2 class="font-extrabold text-indigo-950 dark:text-white text-base">當年度保障總表</h2>
+                                            <div class="w-8 h-8 flex items-center justify-center rounded-full text-indigo-400 bg-indigo-50 dark:bg-gray-800 group-hover:text-stripe-blurple group-hover:bg-indigo-100 dark:group-hover:bg-gray-700 transition-colors">
+                                                <i class="fa-solid fa-chevron-down transition-transform duration-300" :class="{'rotate-180': isSummaryExpanded}"></i>
+                                            </div>
+                                        </div>
+                                        
+                                        <div v-show="isSummaryExpanded" class="space-y-4 pt-4 mt-2 border-t border-indigo-100/50 dark:border-gray-800">
+                                            <div class="text-[10px] text-indigo-400 dark:text-gray-400 font-bold mb-3 flex items-center gap-1.5"><i class="fa-solid fa-circle-info"></i> 系統已自動加總名下所有有效保單之保障額度</div>
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div v-for="cat in compareCategories" :key="'summary_'+cat.title" class="flex flex-col">
+                                                    <div class="text-[10px] font-extrabold text-indigo-400 dark:text-gray-500 mb-2 flex items-center gap-1.5 uppercase tracking-widest">
+                                                        <i :class="cat.icon" class="opacity-80"></i> {{ cat.title }}
+                                                    </div>
+                                                    <div class="flex flex-col border border-indigo-50 dark:border-gray-700/80 rounded-xl overflow-hidden flex-1">
+                                                        <div v-for="(label, key) in cat.keys" :key="'summary_key_'+key" class="flex justify-between items-center py-2.5 px-3 border-b border-indigo-50 dark:border-gray-700/80 last:border-0 bg-white/80 dark:bg-stripe-darkCard hover:bg-indigo-50/50 dark:hover:bg-gray-800/50 transition-colors">
+                                                            <span class="text-[11px] text-slate-500 dark:text-gray-400 font-bold w-1/3 leading-tight pr-2">{{ label }}</span>
+                                                            <span class="text-[12px] text-slate-800 dark:text-gray-100 font-extrabold w-2/3 text-right whitespace-pre-line text-stripe-blurple dark:text-indigo-400" v-html="selectedCustomer.aggregatedData?.[key] || '-'"></span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </transition>
                         </div>
@@ -727,16 +800,17 @@
                                 <div class="flex overflow-x-auto no-scrollbar gap-2 pb-2 cursor-grab active:cursor-grabbing prevent-select" ref="topicTableRef" @mousedown="topicDragStart" @mousemove="topicDragMove" @mouseup="topicDragEnd" @mouseleave="topicDragEnd">
                                     <button v-for="topic in trendingTopics" :key="topic.id" @click="selectedTopic = topic" class="whitespace-nowrap px-4 py-2 rounded-full border text-xs font-bold transition-all shrink-0 pointer-events-auto shadow-sm" :class="selectedTopic?.id === topic.id ? 'bg-gradient-to-r from-stripe-blurple to-indigo-500 border-transparent text-white shadow-[0_4px_15px_rgba(99,91,255,0.3)]' : 'bg-white dark:bg-stripe-darkCard border-indigo-100 dark:border-gray-700 text-slate-600 dark:text-gray-300 hover:bg-indigo-50 dark:hover:bg-gray-800'"><span class="mr-1.5">{{ topic.emoji }}</span> {{ topic.title }}</button>
                                 </div>
-                                <div class="mt-4 flex gap-2 items-center">
-                                    <div class="flex-1 relative"><i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3 text-indigo-400 text-xs"></i><input type="text" v-model="customTopic" placeholder="輸入客群或時事 (例: 科技業單身族)" class="w-full bg-white dark:bg-stripe-darkBg border border-indigo-100 dark:border-gray-700 rounded-full pl-9 pr-3 py-2 text-xs text-slate-800 dark:text-white focus:outline-none focus:border-stripe-blurple focus:shadow-stripe-focus transition-all shadow-sm"></div>
-                                    <button @click="generatePitch" :disabled="isGeneratingPitch || !customTopic?.trim()" class="shrink-0 px-4 py-2 bg-stripe-blurple hover:bg-[#5446E5] text-white text-xs font-bold rounded-full shadow-stripe disabled:opacity-50 transition-all whitespace-nowrap"><span v-if="isGeneratingPitch"><i class="fa-solid fa-circle-notch fa-spin"></i></span><span v-else>生成專屬話術</span></button>
-                                </div>
                             </div>
                             <div class="flex-1 overflow-y-auto no-scrollbar p-5" v-if="selectedTopic">
                                 <div class="bg-gradient-to-br from-indigo-950 to-purple-900 dark:bg-stripe-darkCard border border-indigo-900 dark:border-gray-700 rounded-2xl p-5 text-white mb-6 shadow-[0_10px_30px_rgba(10,37,64,0.15)] relative overflow-hidden"><i class="fa-solid fa-quote-right absolute -right-2 -bottom-4 text-7xl opacity-10 text-indigo-300"></i><span class="text-[10px] font-extrabold px-2 py-1 rounded bg-white/20 text-indigo-50 mb-3 inline-block uppercase tracking-wider">背景情境</span><h3 class="font-black text-lg mb-2 leading-tight text-white">{{ selectedTopic.title }}</h3><p class="text-sm text-indigo-100 leading-relaxed font-medium">{{ selectedTopic.context }}</p></div>
+                                <div class="flex bg-indigo-50/80 dark:bg-gray-800/80 rounded-full p-1 mb-5 border border-indigo-100/50 dark:border-gray-700 shadow-inner">
+                                    <button @click="selectedTone = '激情'" class="flex-1 py-2 text-xs font-bold rounded-full transition-all" :class="selectedTone === '激情' ? 'bg-white dark:bg-stripe-darkCard text-stripe-blurple shadow-sm' : 'text-indigo-400 hover:text-indigo-600 dark:hover:text-gray-300'">🔥 激情口吻</button>
+                                    <button @click="selectedTone = '幽默'" class="flex-1 py-2 text-xs font-bold rounded-full transition-all" :class="selectedTone === '幽默' ? 'bg-white dark:bg-stripe-darkCard text-stripe-blurple shadow-sm' : 'text-indigo-400 hover:text-indigo-600 dark:hover:text-gray-300'">😄 幽默口吻</button>
+                                    <button @click="selectedTone = '專家'" class="flex-1 py-2 text-xs font-bold rounded-full transition-all" :class="selectedTone === '專家' ? 'bg-white dark:bg-stripe-darkCard text-stripe-blurple shadow-sm' : 'text-indigo-400 hover:text-indigo-600 dark:hover:text-gray-300'">💼 專家口吻</button>
+                                </div>
                                 <h3 class="font-extrabold text-indigo-950 dark:text-white text-sm mb-4 flex items-center gap-2"><i class="fa-solid fa-bullseye text-stripe-blurple"></i> 分眾切入建議</h3>
                                 <div class="space-y-4">
-                                    <div v-for="(pitch, idx) in selectedTopic.pitches" :key="idx" class="bg-white/95 backdrop-blur dark:bg-stripe-darkCard border border-indigo-100/60 dark:border-gray-700 rounded-2xl overflow-hidden shadow-sm group hover:border-stripe-blurple/50 dark:hover:border-gray-500 transition-colors">
+                                    <div v-for="(pitch, idx) in selectedTopic.pitches[selectedTone]" :key="idx" class="bg-white/95 backdrop-blur dark:bg-stripe-darkCard border border-indigo-100/60 dark:border-gray-700 rounded-2xl overflow-hidden shadow-sm group hover:border-stripe-blurple/50 dark:hover:border-gray-500 transition-colors">
                                         <div class="bg-indigo-50/50 dark:bg-gray-800/80 px-4 py-2.5 border-b border-indigo-50 dark:border-gray-700 flex justify-between items-center"><span class="text-xs font-extrabold text-indigo-950 dark:text-gray-300 flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full bg-stripe-blurple"></div> {{ pitch.target }}</span></div>
                                         <div class="p-5"><p class="text-sm text-slate-700 dark:text-gray-400 leading-relaxed mb-5 font-bold">「{{ pitch.text }}」</p><button @click="copyToClipboard(pitch.text)" class="w-full py-2.5 bg-white dark:bg-stripe-darkBg text-stripe-blurple dark:text-gray-300 rounded-full text-xs font-extrabold border border-indigo-100 dark:border-gray-700 hover:border-stripe-blurple hover:bg-indigo-50 dark:hover:border-stripe-blurple dark:hover:text-stripe-blurple transition-all flex items-center justify-center gap-2 shadow-sm"><i class="fa-regular fa-copy"></i> 複製話術</button></div>
                                     </div>

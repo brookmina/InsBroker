@@ -428,6 +428,7 @@
                         aiGood: '您的<span class="text-teal-600 dark:text-teal-400 font-bold">實支實付</span>與<span class="text-teal-600 dark:text-teal-400 font-bold">意外險</span>額度充足。',
                         aiBad: '目前的<span class="text-rose-500 font-bold">重大傷病</span>與<span class="text-rose-500 font-bold">長照</span>保障明顯不足。',
                         aiSuggestion: '可考慮增購「定期重大傷病險」。',
+                        aggregatedData: { genDeath: '300 萬元', accDeath: '400 萬元', canDeath: '300 萬元', hospitalRoom: '1,500 元', icuBurn: '3,000 元', icu: '3,000 元', outpatient: '500 元', convalescence: '1,000 元', surgery: '最高 15 萬', misc: '最高 20 萬', opSurgery: '限額 5 萬', copy: '可副本' },
                         policies: [
                             {
                                 id: 'pol_1', company: '三商美邦', policyNumber: 'BI150416001', effectiveDate: '115/04/16', issueAge: 30, paymentDate: '116/04/16', paymentFrequency: '年繳', totalPremium: '4,600', status: '保單正常', applicant: '王大明', applicantMode: 'same', notes: '',
@@ -448,6 +449,7 @@
                         aiGood: '整體保障非常完整，防護網堅固。',
                         aiBad: '壽險保障略低，可再稍微補強。',
                         aiSuggestion: '可利用「定期壽險」補足缺口。',
+                        aggregatedData: { genDeath: '10 萬元', accDeath: '110 萬元', canDeath: '10 萬元', hospitalRoom: '2,000 元', icuBurn: '-', icu: '4,000 元', outpatient: '250 元', convalescence: '-', surgery: '最高 16 萬', misc: '最高 15 萬', opSurgery: '獨立額度', copy: '可副本' },
                         policies: [
                             {
                                 id: 'pol_3', company: '台灣人壽', policyNumber: 'TW55544433', effectiveDate: '2019-08-05', issueAge: 29, status: '有效', paymentDate: '每年8月5日', paymentFrequency: '年繳', applicant: '林雅婷', applicantMode: 'same', notes: '',
@@ -668,10 +670,13 @@
                 const userInput = ref(''); const isTyping = ref(false); const chatContainer = ref(null); const quickQueryContainer = ref(null);
                 const messages = ref([{ role: 'bot', text: '您好！我是您的智能助理。您可以直接輸入問題，或點選下方「快速查詢」。', time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) }]);
                 const quickQueries = ['🧾 智能解析理賠收據', '⚖️ 比較富邦與新光專案', '💰 查詢理賠額度', '⛽ 油價大漲，檢視保障', '住院一天理賠多少？'];
-                const chatFileInput = ref(null); const chatAttachment = ref(null);
+                const chatFileInput = ref(null); const chatAttachments = ref([]);
+                const chatInputRef = ref(null); const chatActionTag = ref(null);
+                watch(userInput, () => { nextTick(() => { if (chatInputRef.value) { chatInputRef.value.style.height = 'auto'; if (userInput.value) chatInputRef.value.style.height = chatInputRef.value.scrollHeight + 'px'; } }); });
+                const setChatActionTag = (tag) => { chatActionTag.value = tag; setTimeout(() => { if (chatInputRef.value) chatInputRef.value.focus(); }, 50); };
                 const triggerChatFileUpload = () => { chatFileInput.value.click(); };
-                const handleChatFileUpload = (e) => { if (e.target.files[0]) { chatAttachment.value = e.target.files[0]; showToast('已夾帶檔案'); } e.target.value = ''; };
-                const removeChatAttachment = () => { chatAttachment.value = null; };
+                const handleChatFileUpload = (e) => { if (e.target.files && e.target.files.length > 0) { Array.from(e.target.files).forEach(f => chatAttachments.value.push(f)); showToast(`已新增 ${e.target.files.length} 個檔案`); } if (chatFileInput.value) chatFileInput.value.value = ''; };
+                const removeChatAttachment = (idx) => { chatAttachments.value.splice(idx, 1); };
 
                 const isRecording = ref(false); let recognition = null;
                 const simulateVoiceInput = () => { 
@@ -707,19 +712,25 @@
                 const handleQuickQuery = (query) => { if (dragged) return; userInput.value = query; sendMessage(query); };
 
                 const sendMessage = async (text) => {
-                    if ((!text?.trim() && !chatAttachment.value) || isTyping.value) return;
-                    const newMsg = { role: 'user', text: text?.trim(), time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) };
-                    if (chatAttachment.value) newMsg.attachment = { name: chatAttachment.value.name };
-                    messages.value.push(newMsg); userInput.value = ''; chatAttachment.value = null; if (isRecording.value && recognition) recognition.stop();
+                    if ((!text?.trim() && chatAttachments.value.length === 0) || isTyping.value) return;
+                    
+                    let finalMsgText = text?.trim() || '';
+                    if (chatActionTag.value) {
+                        finalMsgText = `【${chatActionTag.value}】${finalMsgText}`;
+                    }
+
+                    const newMsg = { role: 'user', text: finalMsgText, time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) };
+                    if (chatAttachments.value.length > 0) newMsg.attachments = chatAttachments.value.map(f => ({ name: f.name }));
+                    messages.value.push(newMsg); userInput.value = ''; chatAttachments.value = []; chatActionTag.value = null; if (isRecording.value && recognition) recognition.stop();
                     isTyping.value = true; scrollToBottom();
-                    if (text.includes('試算') || text.includes('收據') || text.includes('比較') || text.includes('理賠多少')) {
+                    if (finalMsgText.includes('試算') || finalMsgText.includes('收據') || finalMsgText.includes('比較') || finalMsgText.includes('理賠多少')) {
                         setTimeout(() => {
                             let botReply = '根據保單總覽，此項目在保障範圍內。詳細額度建議查看條款。'; let claimsData = null; let compareData = null; let estimatedClaim = null;
-                            if (text.includes('試算') || text.includes('收據')) { 
+                            if (finalMsgText.includes('試算') || finalMsgText.includes('收據')) { 
                                 botReply = '預估可申請的理賠明細如下：'; estimatedClaim = { total: 'NT$ 42,000', breakdown: [{ name: '病房費差額', source: '實在醫靠醫療費用健康保險附約(XHB)', policyNumber: 'GL10087654', amount: '4,500' }, { name: '住院醫療雜費', source: '實在醫靠醫療費用健康保險附約(XHB)', policyNumber: 'GL10087654', amount: '25,500' }, { name: '住院日額補償', source: '康富醫療健康保險附約(RM1)', policyNumber: 'RM99887766', amount: '12,000' }] }; 
-                            } else if (text.includes('比較')) { 
+                            } else if (finalMsgText.includes('比較')) { 
                                 botReply = '為您對比專案亮點：'; compareData = { prod1: { name: '富邦專案', id: 'FB_PRJ' }, prod2: { name: '新光專案', id: 'SK_PRJ' }, rows: [{ label: '意外身故', val1: '100萬', val2: '100萬' }, { label: '住院日額', val1: '1,000~2,000元', val2: '-' }, { label: '加護病房', val1: '2,000元', val2: '-' }, { label: '燒燙傷', val1: '-', val2: '4,000元' }] }; 
-                            } else if (text.includes('理賠多少')) { 
+                            } else if (finalMsgText.includes('理賠多少')) { 
                                 botReply = '針對本次事故，預估理賠明細如下：'; claimsData = [{ company: '中國人壽', product: '時時保護意外險', amount: '30,000元' }, { company: '台新金控', product: '保障骨折險', amount: '依診斷書' }]; 
                             } 
                             isTyping.value = false; messages.value.push({ role: 'bot', text: botReply, claimsData, compareData, estimatedClaim, time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) }); scrollToBottom();
@@ -727,7 +738,7 @@
                     }
                     try {
                         const systemPrompt = "你是一位專業的台灣保險業務助理。請簡潔回答客戶問題，可使用Emoji。";
-                        const payload = { contents: [{ parts: [{ text: text?.trim() }] }], systemInstruction: { parts: [{ text: systemPrompt }] } };
+                        const payload = { contents: [{ parts: [{ text: finalMsgText }] }], systemInstruction: { parts: [{ text: systemPrompt }] } };
                         const replyText = await fetchGemini(payload); messages.value.push({ role: 'bot', text: replyText, time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) });
                     } catch (error) {
                         messages.value.push({ role: 'bot', text: '⚠️ 網路連線不穩，請稍後再試。', time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) });
@@ -815,7 +826,7 @@
                 };
 
                 const searchQuery = ref(''); const selectedCustomer = ref(null);
-                const isCustomerExpanded = ref(false); const isEditingCustomer = ref(false); const editCustomerData = ref({});
+                const isCustomerExpanded = ref(false); const isEditingCustomer = ref(false); const editCustomerData = ref({}); const isSummaryExpanded = ref(false);
                 const expandedPolicies = ref({}); const editingPolicies = ref({}); const editPolicyData = ref({});
                 const isAddingCustomer = ref(false); const newCustomerData = ref({ name: '', idNumber: '', phone: '', birthday: '', email: '', address: '', notes: '' });
 
@@ -835,8 +846,8 @@
                 };
 
                 const filteredCustomers = computed(() => { if (!searchQuery.value) return []; const q = searchQuery.value.toLowerCase(); return customersDB.filter(c => c.name.includes(q) || c.phone.includes(q)); });
-                const selectCustomer = (customer) => { selectedCustomer.value = customer; searchQuery.value = ''; isCustomerExpanded.value = false; isEditingCustomer.value = false; expandedPolicies.value = {}; editingPolicies.value = {}; };
-                const clearCustomer = () => { selectedCustomer.value = null; showAddPolicyForm.value = false; isCustomerExpanded.value = false; isEditingCustomer.value = false; expandedPolicies.value = {}; editingPolicies.value = {}; };
+                const selectCustomer = (customer) => { selectedCustomer.value = customer; searchQuery.value = ''; isCustomerExpanded.value = false; isEditingCustomer.value = false; isSummaryExpanded.value = false; expandedPolicies.value = {}; editingPolicies.value = {}; };
+                const clearCustomer = () => { selectedCustomer.value = null; showAddPolicyForm.value = false; isCustomerExpanded.value = false; isEditingCustomer.value = false; isSummaryExpanded.value = false; expandedPolicies.value = {}; editingPolicies.value = {}; };
                 const toggleCustomerInfo = () => { isCustomerExpanded.value = !isCustomerExpanded.value; if (!isCustomerExpanded.value) isEditingCustomer.value = false; };
                 const startEditCustomer = () => { editCustomerData.value = { ...selectedCustomer.value }; isEditingCustomer.value = true; };
                 const saveCustomerInfo = () => { Object.assign(selectedCustomer.value, editCustomerData.value); isEditingCustomer.value = false; showToast('✅ 更新成功'); };
@@ -877,12 +888,13 @@
                 const topicDragMove = (e) => { if (!topicIsDown) return; e.preventDefault(); const x = e.pageX - topicTableRef.value.offsetLeft; topicTableRef.value.scrollLeft = topicScrollLeft - (x - topicStartX) * 1.5; };
                 const topicDragEnd = () => { topicIsDown = false; };
 
-                const customTopic = ref(''); const isGeneratingPitch = ref(false);
-                const trendingTopics = ref([ { id: 'topic4', emoji: '⛽', title: '油價物價雙漲', context: '近期國內外油價持續攀升，帶動民生物資齊漲。', pitches: [{ target: '通勤族/上班族', text: '「最近物價一直漲，不如趁現在讓我幫您做個免費『保單健診』，把預算省下來對抗通膨！」' }, { target: '家庭客群', text: '「越是這種時候，我們越要確定家裡的『防護網』沒有破洞，讓我幫您重新檢視保障吧！」' }] }, { id: 'topic1', emoji: '🏥', title: '健保停付指示用藥', context: '健保署宣布將逐步取消部分指示用藥健保給付。', pitches: [{ target: '年輕小資族', text: '「醫療自費項目越來越多！趁年輕保費便宜，我們檢視一下實支實付額度夠不夠好嗎？」' }] } ]);
+                const selectedTone = ref('專家');
+                const trendingTopics = ref([ 
+                    { id: 'topic4', emoji: '⛽', title: '油價物價雙漲', context: '近期國內外油價持續攀升，帶動民生物資齊漲。', pitches: { '激情': [{ target: '通勤族/上班族', text: '「最近物價一直漲，不如趁現在讓我幫您做個免費『保單健診』，把預算省下來對抗通膨！」' }, { target: '家庭客群', text: '「越是這種時候，我們越要確定家裡的『防護網』沒有破洞，讓我幫您重新檢視保障吧！」' }], '幽默': [{ target: '通勤族/上班族', text: '「雞排都漲到100塊了，你的保額還停留在10年前嗎？讓我幫你更新一下防護網吧！」' }, { target: '家庭客群', text: '「通膨把錢包變瘦了，至少別讓風險把剩下的錢吃掉！免費保單健診約起來！」' }], '專家': [{ target: '通勤族/上班族', text: '「高通膨時代，實質購買力下降。透過專業保單健診，能有效優化您的保費支出結構，確保風險轉嫁效益最大化。」' }, { target: '家庭客群', text: '「建議您定期檢視資產配置與風險轉嫁比例，特別是通膨期間，醫療通膨更是我們需要重點防禦的缺口。」' }] } }, 
+                    { id: 'topic1', emoji: '🏥', title: '健保停付指示用藥', context: '健保署宣布將逐步取消部分指示用藥健保給付。', pitches: { '激情': [{ target: '年輕小資族', text: '「醫療自費項目越來越多！趁年輕保費便宜，我們檢視一下實支實付額度夠不夠好嗎？」' }], '幽默': [{ target: '年輕小資族', text: '「以後看醫生連胃藥都要自己掏錢啦！還不趕快把實支實付補好補滿？」' }], '專家': [{ target: '年輕小資族', text: '「隨著健保給付縮減，未來自費醫療項目將持續增加。及早規劃完善的實支實付醫療險，能有效轉嫁未來的醫療支出風險。」' }] } } 
+                ]);
                 const selectedTopic = ref(trendingTopics.value[0]); 
                 const copyToClipboard = (text) => { const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); showToast('已複製！'); } catch(e) {} document.body.removeChild(ta); };
-
-                const generatePitch = async () => { if (!customTopic.value?.trim()) return; isGeneratingPitch.value = true; try { const prompt = `請針對保險主題「${customTopic.value}」，以台灣保險業務員的口吻，生成兩段針對不同客群的行銷切入話術。請必須且只以 JSON 格式回傳，格式如下： { "title": "${customTopic.value}", "context": "簡短的主題背景說明", "pitches": [ { "target": "目標客群1", "text": "話術內容1" }, { "target": "目標客群2", "text": "話術內容2" } ] }`; const payload = { contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: "application/json" } }; const jsonText = await fetchGemini(payload); const result = JSON.parse(jsonText); const newTopic = { ...result, id: 'custom_' + Date.now(), emoji: '✨' }; trendingTopics.value.unshift(newTopic); selectedTopic.value = newTopic; customTopic.value = ''; showToast('✨ 生成成功！'); } catch (error) { showToast('⚠️ 生成失敗，請重試'); } finally { isGeneratingPitch.value = false; } };
 
                 const showCustomComboManagerModal = ref(false); const editingCombo = ref(null);
                 const singleProductsOptions = computed(() => Object.values(products).filter(p => p.planType !== '專案').map(p => ({ value: p.id, label: p.name })));
@@ -952,12 +964,13 @@
                     products, compareCategories, getProduct, highlightDiff,
                     selectedProductDetail, openProductModal, closeProductModal, showRulesModal, showTermsModal,
                     userInput, isTyping, chatContainer, quickQueryContainer, messages, quickQueries, sendMessage, handleQuickQuery, 
-                    chatFileInput, chatAttachment, triggerChatFileUpload, handleChatFileUpload, removeChatAttachment, 
+                    chatFileInput, chatAttachments, triggerChatFileUpload, handleChatFileUpload, removeChatAttachment, 
+                    chatInputRef, chatActionTag, setChatActionTag,
                     isRecording, toggleVoiceInput, startDrag, onDrag, stopDrag,
                     claimIncidents, selectedIncident, claimCalcStatus, estimatedClaimResult, handleClaimCalcUpload, resetClaimCalc,
                     claimSearchQuery, selectedClaimCustomer, claimFilteredCustomers, matchedClaimCompanies,
                     expandedClaimCompanies, toggleClaimCompany,
-                    searchQuery, selectedCustomer, filteredCustomers, selectCustomer, clearCustomer, isCustomerExpanded, isEditingCustomer, editCustomerData, toggleCustomerInfo, startEditCustomer, saveCustomerInfo, cancelEditCustomer, calculateAge, expandedPolicies, editingPolicies, editPolicyData, togglePolicy, startEditPolicy, saveEditPolicy, cancelEditPolicy, deletePolicy, showAddPolicyForm, addPolicyFormRef, handleAddPolicyClick, addPolicyMethod, isOcrProcessing, newPolicyData, handleFileUpload, savePolicy, cancelAddPolicy,
+                    searchQuery, selectedCustomer, filteredCustomers, selectCustomer, clearCustomer, isCustomerExpanded, isEditingCustomer, editCustomerData, toggleCustomerInfo, startEditCustomer, saveCustomerInfo, cancelEditCustomer, calculateAge, expandedPolicies, editingPolicies, editPolicyData, togglePolicy, startEditPolicy, saveEditPolicy, cancelEditPolicy, deletePolicy, showAddPolicyForm, addPolicyFormRef, handleAddPolicyClick, addPolicyMethod, isOcrProcessing, newPolicyData, handleFileUpload, savePolicy, cancelAddPolicy, isSummaryExpanded,
                     compareList, showGamifiedModal, addToCompare, updateCompareList, handleAnalyzeAction, 
                     compareSlots, draggingIndex, slotDragState, onSlotDragStart, addCompareSlot, removeCompareSlot,
                     calculateItemTotalPremium, getSlotTotalPremium, getSlotTotalOverallPremium,
@@ -966,7 +979,7 @@
                     selectorActiveTab, showProductSelectorModal, filteredProductsForSelector, openProductSelector, closeProductSelector, selectProductForSlot, searchComp, searchProd, searchType, searchStatus, resetModalSearch, modalCompanyOptions, modalProductOptions, isProductSelected,
                     selectedCompany, uniqueCompanies, filteredProductsForSimilar, filteredProductOptions, onCompanyChange, similarTarget, getSimilarProducts, jumpToCompare,
                     compareTableRef, compDragStart, compDragMove, compDragEnd, topicTableRef, topicDragStart, topicDragMove, topicDragEnd,
-                    trendingTopics, selectedTopic, copyToClipboard, customTopic, isGeneratingPitch, generatePitch,
+                    trendingTopics, selectedTopic, selectedTone, copyToClipboard,
                     isDarkMode, toggleDarkMode,
                     isAddingCustomer, newCustomerData, startAddCustomer, cancelAddCustomer, saveNewCustomer,
                     customCombos, showCustomComboManagerModal, editingCombo, singleProductsOptions, startAddCombo, startEditCombo, deleteCombo, removeComboItem, saveCombo, cancelEditCombo,
